@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #fff;
+      color: #111;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    nav {
+      position: relative;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hamburger {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px;
+    }
+
+    .hamburger span {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: #111;
+      border-radius: 2px;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      transform-origin: center;
+    }
+
+    .menu-labels {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.25s ease;
+    }
+
+    .menu-labels p {
+      font-size: 2.3rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      color: #111;
+      transition: color 0.2s ease;
+    }
+
+    .menu-labels p:hover { color: #606060; }
+
+    .hamburger.open .menu-labels { opacity: 0; pointer-events: none; }
+
+    .content-panel {
+      position: fixed;
+      width: 260px;
+      height: 160px;
+      padding: 1.25rem 1.5rem;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: #fff;
+      display: none;
+      overflow-y: auto;
+      z-index: 52;
+    }
+
+    .content-panel.active { display: block; }
+    #panel-work    { background: #1d4ed8; }
+    #panel-bio     { background: #b91c1c; }
+    #panel-contact { background: #15803d; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+    <span></span>
+    <span></span>
+    <span></span>
+    <div class="menu-labels">
+      <p>WORK</p>
+      <p>BIO</p>
+      <p>CONTACT</p>
+    </div>
+  </button>
+</nav>
+
+<script>
+  const btn = document.getElementById('hamburger');
+
+  // ── Root-5 sacred geometry ─────────────────────────────────────────────────
+  //
+  // Given a square of side W, the distance from the midpoint of one edge to
+  // an opposite corner is √((W/2)²+W²) = W√5/2.  That arc radius is the
+  // classical compass step that produces the golden ratio and defines the
+  // root-5 rectangle (proportions 1 : √5).
+  //
+  // Here the rectangle is oriented vertically: width W, height W√5.
+  // It decomposes into a central W×W square flanked above and below by two
+  // golden rectangles (each W × W(√5−1)/2 = W/φ tall — exactly φ-proportioned
+  // because (√5−1)/2 = 1/φ).
+  //
+  // Elements drawn (all strokes, no fills):
+  //   1. Outer root-5 rectangle
+  //   2. Two horizontal dividers at ± W/2 from centre  (golden-section cuts)
+  //   3. Vertical axis
+  //   4. Large circle inscribed in the central square   (radius W/2)
+  //   5. Two small circles inscribed in the golden rectangles
+  //      (radius (H−W)/4 = W(√5−1)/4; their diameter = the rectangle's height)
+  //   6. Two construction arcs, each of radius H/2 = W√5/2:
+  //        Bowl arc — centre at (cx, cy−R), connects the bottom corners of the
+  //          central square, bulging downward into the lower golden rectangle.
+  //        Dome arc — mirror of the bowl, bulging upward into the upper golden
+  //          rectangle.
+  //      These arcs ARE the √5 compass arc made visible.
+
+  const SQRT5  = Math.sqrt(5);
+  const COLOUR = 'rgba(150,150,150,0.8)';
+  const SW     = '1.5';
+  const NS     = 'http://www.w3.org/2000/svg';
+
+  function spawnGeometry() {
+    removeGeometry();
+    const r  = btn.getBoundingClientRect();
+    const cx = r.left + r.width  / 2;
+    const cy = r.top  + r.height / 2;
+    document.querySelectorAll('.content-panel').forEach(p => {
+      p.style.left = (cx - 130) + 'px';
+      p.style.top  = (cy - 80) + 'px';
+    });
+
+    const H   = window.innerHeight * 0.99;  // total height of the figure
+    const W   = H / SQRT5;                 // width  (root-5 proportion)
+    const R   = W / 2;                     // large circle radius = half width
+    const sr  = (H - W) / 4;              // small circle radius = W(√5−1)/4
+    const scy = R + sr;                    // small circle centre y-offset = W·φ/2
+    const arcR = H / 2;                    // construction arc radius = W√5/2
+
+    const svg = document.createElementNS(NS, 'svg');
+    svg.id = 'geom';
+    svg.setAttribute('width',    window.innerWidth);
+    svg.setAttribute('height',   window.innerHeight);
+    svg.setAttribute('viewBox',  `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    svg.setAttribute('overflow', 'visible');
+    Object.assign(svg.style, {
+      position: 'fixed', top: '0', left: '0',
+      pointerEvents: 'none', zIndex: '50',
+    });
+
+    const base = { fill: 'none', stroke: COLOUR, 'stroke-width': SW };
+
+    function add(tag, attrs) {
+      const el = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries({ ...base, ...attrs }))
+        el.setAttribute(k, v);
+      svg.appendChild(el);
+    }
+
+    // 1. Outer root-5 rectangle
+    add('rect', { x: cx - W/2, y: cy - H/2, width: W, height: H });
+
+    // 2. Golden-section horizontal dividers
+    add('line', { x1: cx - W/2, y1: cy - R, x2: cx + W/2, y2: cy - R });
+    add('line', { x1: cx - W/2, y1: cy + R, x2: cx + W/2, y2: cy + R });
+
+    // 3. Vertical axis
+    add('line', { x1: cx, y1: cy - H/2, x2: cx, y2: cy + H/2 });
+
+    // 4. Large circle inscribed in the central square
+    add('circle', { cx, cy, r: R });
+
+    // 5. Small circles inscribed in the golden rectangles
+    add('circle', { cx, cy: cy - scy, r: sr });
+    add('circle', { cx, cy: cy + scy, r: sr });
+
+    // 6. Construction arcs
+    // Bowl: from bottom-left to bottom-right corner of the central square,
+    //   arc centre at (cx, cy−R), radius H/2.
+    //   Verified: dist((cx,cy−R) → (cx±R, cy+R)) = √(R²+(2R)²) = R√5 = H/2 ✓
+    //   Short CCW arc (sweep=0, large-arc=0) passes through (cx, cy+R(√5−1)),
+    //   which is the classical golden-ratio point inside the lower golden rectangle.
+    add('path', {
+      d: `M ${cx-R} ${cy+R} A ${arcR} ${arcR} 0 0 0 ${cx+R} ${cy+R}`,
+    });
+    // Dome: mirror — arc centre at (cx, cy+R), same radius.
+    //   Short CW arc (sweep=1, large-arc=0) passes through (cx, cy−R(√5−1)).
+    add('path', {
+      d: `M ${cx-R} ${cy-R} A ${arcR} ${arcR} 0 0 1 ${cx+R} ${cy-R}`,
+    });
+
+    // 7. Close button — outside the figure, to the right of its right edge
+    const cbr = 20;
+    const arm = 10;
+    const cbx = cx + W / 2 + cbr + 20;
+    const cby = cbr + 20;
+    add('circle', { cx: cbx, cy: cby, r: cbr });
+    add('line', { x1: cbx - arm, y1: cby - arm, x2: cbx + arm, y2: cby + arm });
+    add('line', { x1: cbx + arm, y1: cby - arm, x2: cbx - arm, y2: cby + arm });
+
+    document.body.appendChild(svg);
+
+    // Transparent hit target on top of the close circle
+    const hit = document.createElement('button');
+    hit.id = 'close-btn';
+    const hitSize = cbr * 3;
+    Object.assign(hit.style, {
+      position: 'fixed',
+      left: (cbx - hitSize / 2) + 'px',
+      top:  (cby - hitSize / 2) + 'px',
+      width:  hitSize + 'px',
+      height: hitSize + 'px',
+      cursor: 'pointer',
+      background: 'none',
+      border: 'none',
+      padding: '0',
+      zIndex: '55',
+    });
+    hit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      btn.classList.remove('open');
+      btn.setAttribute('aria-expanded', false);
+      removeGeometry();
+    });
+    document.body.appendChild(hit);
+  }
+
+  function removeGeometry() {
+    document.getElementById('geom')?.remove();
+    document.getElementById('close-btn')?.remove();
+    document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = btn.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+    if (open) spawnGeometry(); else removeGeometry();
+  });
+
+  document.addEventListener('click', () => {
+    btn.classList.remove('open');
+    btn.setAttribute('aria-expanded', false);
+    removeGeometry();
+  });
+
+  const panelIds = ['panel-work', 'panel-bio', 'panel-contact'];
+  btn.querySelectorAll('.menu-labels p').forEach((label, i) => {
+    label.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+      if (!btn.classList.contains('open')) {
+        btn.classList.add('open');
+        btn.setAttribute('aria-expanded', true);
+        spawnGeometry();
+      }
+      document.getElementById(panelIds[i]).classList.add('active');
+    });
+  });
+</script>
+
+<div class="content-panel" id="panel-work">
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam quis nostrud exercitation.</p>
+</div>
+<div class="content-panel" id="panel-bio">
+  <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt nulla pariatur.</p>
+</div>
+<div class="content-panel" id="panel-contact">
+  <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint.</p>
+</div>
+
+</body>
+</html>
