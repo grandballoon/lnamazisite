@@ -1,11 +1,256 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Page Title</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #fff;
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1rem;
+    }
+
+    .hamburger {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px;
+    }
+
+    .hamburger span {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: #111;
+      border-radius: 2px;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      transform-origin: center;
+    }
+
+    .menu-labels {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.25s ease;
+    }
+
+    .menu-labels p {
+      font-size: 1.3rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      color: #111;
+      transition: color 0.2s ease;
+    }
+
+    .menu-labels p:hover { color: #606060; }
+
+    .hamburger.open .menu-labels { opacity: 0; pointer-events: none; }
+    .hamburger.open span { opacity: 1; }
+    .hamburger.open span:nth-child(1) { transform: translate(-50%, -50%) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translate(-50%, -50%) rotate(-45deg); }
+
+    main {
+      flex: 1;
+      padding: 5rem 2rem 2rem;
+    }
+
+    .content-panel {
+      position: fixed;
+      width: 260px;
+      height: 160px;
+      padding: 1.25rem 1.5rem;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: #fff;
+      display: none;
+      overflow-y: auto;
+      z-index: 52;
+    }
+
+    .content-panel.active { display: block; }
+    #panel-work    { background: #1d4ed8; }
+    #panel-bio     { background: #b91c1c; }
+    #panel-contact { background: #15803d; }
+  </style>
 </head>
 <body>
-    <h1>This is the placeholder content for Lili Namazi's personal website.</h1>
+
+<nav>
+  <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+    <span></span>
+    <span></span>
+    <span></span>
+    <div class="menu-labels">
+      <p>WORK</p>
+      <p>BIO</p>
+      <p>CONTACT</p>
+    </div>
+  </button>
+</nav>
+
+<main>
+</main>
+
+<script>
+  const btn = document.getElementById('hamburger');
+  const R1  = 52;
+
+  // ── Ring geometry ──────────────────────────────────────────────────────────
+  // Areas double ⟹ radii scale by √2:  r₀, r₀√2, r₀·2, …
+  //
+  // Each pair of rings is externally tangent at the connection point.
+  // cN₊₁ = cN + (rN + rN₊₁)·dir, so the tangent point lies on both rings.
+  //
+  // Chain reach (farthest point in dir) = 2·∑radii − r₀.
+  // Direction is computed per-spawn from button centre → lower-left corner,
+  // so it adapts to any viewport shape or button position.
+
+  function spawnRings() {
+    removeRings();
+    const rect = btn.getBoundingClientRect();
+    const ox = rect.left + rect.width  / 2;
+    const oy = rect.top  + rect.height / 2;
+
+    // Unit vector from button centre toward lower-left corner of the viewport.
+    const tdx = -ox;
+    const tdy = window.innerHeight - oy;
+    const dist = Math.sqrt(tdx * tdx + tdy * tdy);
+    const DX = tdx / dist;
+    const DY = tdy / dist;
+
+    // Start with 4 rings; extend by up to 2 more until the chain reaches the corner.
+    const radii = [R1, R1 * Math.SQRT2, R1 * 2, R1 * 2 * Math.SQRT2];
+    for (let i = 0; i < 2; i++) {
+      const reach = 2 * radii.reduce((a, b) => a + b, 0) - radii[0];
+      if (reach < dist) radii.push(radii[radii.length - 1] * Math.SQRT2);
+      else break;
+    }
+
+    // Compute centres by chaining tangent points.
+    const centers = [];
+    let cx = ox, cy = oy;
+    for (let i = 0; i < radii.length; i++) {
+      centers.push([cx, cy]);
+      if (i < radii.length - 1) {
+        cx += (radii[i] + radii[i + 1]) * DX;
+        cy += (radii[i] + radii[i + 1]) * DY;
+      }
+    }
+
+    const mid = centers[Math.floor(centers.length / 2)];
+    document.querySelectorAll('.content-panel').forEach(p => {
+      p.style.left = (mid[0] - 130) + 'px';
+      p.style.top  = (mid[1] - 80) + 'px';
+    });
+
+    const NS  = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.id = 'rings';
+    svg.setAttribute('width',    window.innerWidth);
+    svg.setAttribute('height',   window.innerHeight);
+    svg.setAttribute('viewBox',  `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    svg.setAttribute('overflow', 'visible');
+    Object.assign(svg.style, {
+      position: 'fixed', top: '0', left: '0',
+      pointerEvents: 'none', zIndex: '50',
+    });
+
+    const COLOUR = 'rgba(150,150,150,0.8)';
+
+    centers.forEach(([cx, cy], i) => {
+      const circle = document.createElementNS(NS, 'circle');
+      circle.setAttribute('cx', cx);
+      circle.setAttribute('cy', cy);
+      circle.setAttribute('r',  radii[i]);
+      circle.setAttribute('fill',         'none');
+      circle.setAttribute('stroke',       COLOUR);
+      circle.setAttribute('stroke-width', '2');
+      svg.appendChild(circle);
+    });
+
+    // Small dots at the tangent / connection points.
+    for (let i = 0; i < centers.length - 1; i++) {
+      const [cx, cy] = centers[i];
+      const dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', cx + radii[i] * DX);
+      dot.setAttribute('cy', cy + radii[i] * DY);
+      dot.setAttribute('r',  3);
+      dot.setAttribute('fill', COLOUR);
+      svg.appendChild(dot);
+    }
+
+    document.body.appendChild(svg);
+  }
+
+  function removeRings() {
+    document.getElementById('rings')?.remove();
+    document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+  }
+
+  // ── Menu handlers ──────────────────────────────────────────────────────────
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = btn.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+    if (open) spawnRings(); else removeRings();
+  });
+
+  document.addEventListener('click', () => {
+    btn.classList.remove('open');
+    btn.setAttribute('aria-expanded', false);
+    removeRings();
+  });
+
+  const panelIds = ['panel-work', 'panel-bio', 'panel-contact'];
+  btn.querySelectorAll('.menu-labels p').forEach((label, i) => {
+    label.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+      if (!btn.classList.contains('open')) {
+        btn.classList.add('open');
+        btn.setAttribute('aria-expanded', true);
+        spawnRings();
+      }
+      document.getElementById(panelIds[i]).classList.add('active');
+    });
+  });
+</script>
+
+<div class="content-panel" id="panel-work">
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam quis nostrud exercitation.</p>
+</div>
+<div class="content-panel" id="panel-bio">
+  <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt nulla pariatur.</p>
+</div>
+<div class="content-panel" id="panel-contact">
+  <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint.</p>
+</div>
+
 </body>
 </html>
