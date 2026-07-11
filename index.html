@@ -439,16 +439,16 @@
     const button = (name, sub, attr, val, handler) => {
       const b = document.createElement('button');
       b.dataset[attr] = val;
-      b.innerHTML = `${name}<small>${sub}</small>`;
+      b.innerHTML = sub ? `${name}<small>${sub}</small>` : name;
       b.addEventListener('click', e => { e.stopPropagation(); handler(val); });
       return b;
     };
 
     group('Pattern', [
-      ['Shamseh',  'sunburst dome'],
-      ['Girih',    'star strapwork'],
-      ['Muqarnas', 'cusped vault'],
-      ['Root-5',   'construction'],
+      ['Shamseh',  ''],
+      ['Girih',    ''],
+      ['Muqarnas', ''],
+      ['Root-5',   ''],
     ].map(([n, s], i) => button(n, s, 'variant', i + 1, setVariant)));
 
     document.body.appendChild(wrap);
