@@ -7,11 +7,33 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* Palette — every colour in the page reads from these. The JS THEMES table
+       overwrites them on :root when a scheme is picked, and re-renders the
+       ornament with the matching stroke colours. Defaults = "Paper". */
+    :root {
+      --bg:          #fff;
+      --text:        #111;
+      --text-dim:    #606060;
+      --tg-head:     #cfcfcf;
+      --tg-idle:     #b0b0b0;
+      --tg-hover:    #707070;
+      --tg-active:   #111;
+      --panel-bg:    #f7f7f7;
+      --panel-text:  #111;
+      --panel-rule:  #999;
+      --close:       #555;
+      --close-hover: #111;
+    }
+
     body {
       font-family: system-ui, sans-serif;
-      background: #fff;
-      color: #111;
-      height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.45s ease, color 0.45s ease;
+      height: 100vh;   /* fallback */
+      height: 100dvh;  /* mobile: track the dynamic viewport so the URL bar
+                          doesn't leave the page scrollable (scrolling collapses
+                          the bar → resize → the backdrop rebuilds mid-loop) */
       display: flex;
       align-items: center;
       justify-content: center;
@@ -43,7 +65,7 @@
       display: block;
       width: 24px;
       height: 2px;
-      background: #111;
+      background: var(--text);
       border-radius: 2px;
       opacity: 0;
       transform: translate(-50%, -50%);
@@ -64,12 +86,12 @@
       font-weight: 600;
       letter-spacing: 0.08em;
       line-height: 1;
-      color: #111;
+      color: var(--text);
       cursor: pointer;
       transition: color 0.2s ease;
     }
 
-    .menu-labels p:hover { color: #606060; }
+    .menu-labels p:hover { color: var(--text-dim); }
 
     .hamburger.open .menu-labels { opacity: 0; pointer-events: none; }
 
@@ -95,7 +117,7 @@
        Remove this rule to restore them. */
     .content-panel { display: none !important; }
 
-    /* Pattern toggle */
+    /* Pattern + palette toggle */
     #geom-toggle {
       position: fixed;
       display: flex;
@@ -112,7 +134,7 @@
       font: 600 0.6rem/1 system-ui, sans-serif;
       letter-spacing: 0.18em;
       text-transform: uppercase;
-      color: #cfcfcf;
+      color: var(--tg-head);
       padding-left: 10px;
       margin-bottom: 2px;
     }
@@ -123,30 +145,51 @@
       background: none;
       border: none;
       border-left: 2px solid transparent;
-      color: #b0b0b0;
+      color: var(--tg-idle);
       cursor: pointer;
       padding: 2px 0 2px 10px;
       text-align: left;
       transition: color 0.2s ease, border-color 0.2s ease;
     }
-    #geom-toggle button:hover { color: #707070; }
-    #geom-toggle button.active { color: #111; border-left-color: #111; }
+    #geom-toggle button:hover { color: var(--tg-hover); }
+    #geom-toggle button.active {
+      color: var(--tg-active);
+      border-left-color: var(--tg-active);
+    }
     #geom-toggle small {
       display: block;
       font: 400 0.6rem/1.3 system-ui, sans-serif;
       letter-spacing: 0.04em;
       text-transform: none;
-      color: #b8b8b8;
+      color: var(--tg-head);
       margin-top: 2px;
+    }
+
+    /* Palette buttons carry a swatch of their own ground + ornament ink, so the
+       scheme is legible before you commit to it. */
+    #geom-toggle button[data-theme] {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    #geom-toggle .sw {
+      flex: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--sw-bg);
+      box-shadow: inset 0 0 0 1px rgba(128,128,128,0.35),
+                  inset 0 0 0 4px var(--sw-ink);
     }
 
     /* BIO beam split */
     #bio-panel {
       position: fixed;
       z-index: 58;
-      background: #f7f7f7;
-      color: #111;
+      background: var(--panel-bg);
+      color: var(--panel-text);
       overflow-y: auto;
+      transition: background 0.45s ease, color 0.45s ease;
     }
     #bio-panel .bio-inner {
       max-width: 32em;
@@ -170,12 +213,12 @@
       margin-top: 1.4em;
     }
     #bio-panel .contact-email a {
-      color: #111;
+      color: var(--panel-text);
       text-decoration: none;
-      border-bottom: 1px solid #999;
+      border-bottom: 1px solid var(--panel-rule);
       transition: border-color 0.2s ease;
     }
-    #bio-panel .contact-email a:hover { border-bottom-color: #111; }
+    #bio-panel .contact-email a:hover { border-bottom-color: var(--panel-text); }
 
     .menu-half {
       position: fixed;
@@ -199,11 +242,11 @@
     #bio-close svg { display: block; }
     #bio-close circle,
     #bio-close line {
-      stroke: #555;
+      stroke: var(--close);
       transition: stroke 0.2s ease;
     }
     #bio-close:hover circle,
-    #bio-close:hover line { stroke: #111; }
+    #bio-close:hover line { stroke: var(--close-hover); }
   </style>
 </head>
 <body>
@@ -247,8 +290,114 @@
   const SQRT5 = Math.sqrt(5);
   const TAU   = Math.PI * 2;
   const NS    = 'http://www.w3.org/2000/svg';
-  const INK   = 'rgba(120,120,120,0.45)';  // foreground ornament (50% lighter, to sit behind text)
-  const FAINT = 'rgba(150,150,150,0.16)';  // construction frame & guides (50% lighter)
+
+  const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ── Colour schemes ──────────────────────────────────────────────────────────
+  //
+  // Four grounds for the same ornament. Each pairs a background with an ink the
+  // tilework would actually have been laid in, so the geometry keeps reading as
+  // architecture rather than decoration on a coloured box:
+  //
+  //   Paper       — the drawing-board state: graphite on white. The default.
+  //   Ultramarine — lapis lazuli ground, the pigment ground from Badakhshan
+  //                 stone and traded through Persia; ornament in leaf gold,
+  //                 type in unbleached bone.
+  //   Ecru        — the tile palette itself: bone plaster ground, turquoise
+  //                 glaze ink, terracotta setting-out lines.
+  //   Obsidian    — the futurism pole: a black field with the ornament struck
+  //                 in cyan, the girih net read as circuitry.
+  //
+  // `ink`/`faint` are SVG stroke colours; everything else lands on :root as a
+  // custom property. `sw` is the two-tone dot on the toggle button.
+  const THEMES = {
+    paper: {
+      label: 'Paper',
+      ink:   'rgba(120,120,120,0.45)',
+      faint: 'rgba(150,150,150,0.16)',
+      sw:    ['#ffffff', 'rgba(120,120,120,0.55)'],
+      vars: {
+        '--bg': '#fff',
+        '--text': '#111',
+        '--text-dim': '#606060',
+        '--tg-head': '#cfcfcf',
+        '--tg-idle': '#b0b0b0',
+        '--tg-hover': '#707070',
+        '--tg-active': '#111',
+        '--panel-bg': '#f7f7f7',
+        '--panel-text': '#111',
+        '--panel-rule': '#999',
+        '--close': '#555',
+        '--close-hover': '#111',
+      },
+    },
+    ultramarine: {
+      label: 'Ultramarine',
+      ink:   'rgba(236,199,120,0.58)',
+      faint: 'rgba(150,182,255,0.20)',
+      sw:    ['#101fa4', 'rgba(236,199,120,0.85)'],
+      vars: {
+        // Not flat: the pigment pools darker at the edges, as it does in the
+        // painting the palette is taken from.
+        '--bg': 'radial-gradient(ellipse at 50% 34%, #1a2cc4 0%, #0c168f 58%, #050a3c 100%)',
+        '--text': '#f3efe1',
+        '--text-dim': '#cbb684',
+        '--tg-head': '#5d72c4',
+        '--tg-idle': '#8296dd',
+        '--tg-hover': '#cbb684',
+        '--tg-active': '#f0d79a',
+        '--panel-bg': '#f3efe1',
+        '--panel-text': '#0c168f',
+        '--panel-rule': '#b9a06a',
+        '--close': '#cbb684',
+        '--close-hover': '#f3efe1',
+      },
+    },
+    ecru: {
+      label: 'Ecru',
+      ink:   'rgba(15,122,134,0.50)',
+      faint: 'rgba(178,112,58,0.22)',
+      sw:    ['#efe9dc', 'rgba(15,122,134,0.85)'],
+      vars: {
+        '--bg': '#efe9dc',
+        '--text': '#123f47',
+        '--text-dim': '#3f8f96',
+        '--tg-head': '#c3b7a2',
+        '--tg-idle': '#9db0b2',
+        '--tg-hover': '#3f8f96',
+        '--tg-active': '#123f47',
+        '--panel-bg': '#123f47',
+        '--panel-text': '#efe9dc',
+        '--panel-rule': '#4fb3ba',
+        '--close': '#3f8f96',
+        '--close-hover': '#123f47',
+      },
+    },
+    obsidian: {
+      label: 'Obsidian',
+      ink:   'rgba(79,217,196,0.42)',
+      faint: 'rgba(118,150,182,0.16)',
+      sw:    ['#080b0f', 'rgba(79,217,196,0.85)'],
+      vars: {
+        '--bg': 'radial-gradient(ellipse at 50% 40%, #111820 0%, #05070a 78%)',
+        '--text': '#e6f5f1',
+        '--text-dim': '#4fd9c4',
+        '--tg-head': '#3a444e',
+        '--tg-idle': '#54606c',
+        '--tg-hover': '#4fd9c4',
+        '--tg-active': '#e6f5f1',
+        '--panel-bg': '#0b1116',
+        '--panel-text': '#e6f5f1',
+        '--panel-rule': '#2f6d64',
+        '--close': '#54606c',
+        '--close-hover': '#4fd9c4',
+      },
+    },
+  };
+
+  let currentTheme = 'paper';      // persists across open/close, like the pattern
+  let INK   = THEMES.paper.ink;    // foreground ornament (sits behind the text)
+  let FAINT = THEMES.paper.faint;  // construction frame & guides
 
   let currentVariant = 1;          // persists across open/close
   let dcx = 0, dcy = 0, dr = 0;    // design centre + radius, for live toggling
@@ -423,8 +572,10 @@
   function buildToggle(cx, cy, W) {
     const wrap = document.createElement('div');
     wrap.id = 'geom-toggle';
-    wrap.style.left = Math.max(14, cx - W / 2 - 150) + 'px';
-    wrap.style.top  = Math.max(14, cy - 150) + 'px';
+    // "Ultramarine" + its swatch is the widest label; give the stack room so it
+    // never crowds the root-5 column.
+    wrap.style.left = Math.max(14, cx - W / 2 - 172) + 'px';
+    wrap.style.top  = '14px';   // re-centred below, once it has a measured height
 
     const group = (title, btns) => {
       const sec = document.createElement('div');
@@ -451,7 +602,21 @@
       ['Root-5',   ''],
     ].map(([n, s], i) => button(n, s, 'variant', i + 1, setVariant)));
 
+    group('Palette', Object.entries(THEMES).map(([key, t]) => {
+      const b = button(t.label, '', 'theme', key, setTheme);
+      const sw = document.createElement('span');
+      sw.className = 'sw';
+      sw.style.setProperty('--sw-bg',  t.sw[0]);
+      sw.style.setProperty('--sw-ink', t.sw[1]);
+      b.prepend(sw);
+      return b;
+    }));
+
     document.body.appendChild(wrap);
+    // Centre the stack on the figure. Measured rather than assumed, so adding
+    // or removing a group keeps it aligned. (A translateY(-50%) would be
+    // simpler but fadeBackdrop animates this element's transform.)
+    wrap.style.top = Math.max(14, cy - wrap.offsetHeight / 2) + 'px';
   }
 
   // Distance from centre to the element's farthest extent — its "reach".
@@ -499,6 +664,7 @@
   // Stagger the draw-on of every element by its radial reach, outermost first,
   // so the figure assembles inward toward the centre.
   function applyAnim(g) {
+    if (REDUCED_MOTION.matches) return;   // static, fully-drawn figure
     const keyed = Array.from(g.children).map(el => ({ el, k: radiusKey(el) }));
     const ks = keyed.map(o => o.k);
     const min = Math.min(...ks), span = (Math.max(...ks) - min) || 1;
@@ -523,6 +689,32 @@
     document.querySelectorAll('#geom-toggle [data-variant]').forEach(b =>
       b.classList.toggle('active', +b.dataset.variant === v));
     renderDesign();
+  }
+
+  // Page chrome recolours via the custom properties (CSS transitions handle the
+  // crossfade); the ornament's strokes are SVG attributes, so it has to be
+  // redrawn. Redrawing restarts the loop from the outermost element, which
+  // reads as the new palette sweeping inward — the same gesture as a variant
+  // change, so the two toggles behave alike.
+  function setTheme(key) {
+    const t = THEMES[key];
+    if (!t) return;
+    currentTheme = key;
+    for (const [prop, val] of Object.entries(t.vars))
+      document.documentElement.style.setProperty(prop, val);
+    INK   = t.ink;
+    FAINT = t.faint;
+    document.querySelectorAll('#geom-toggle [data-theme]').forEach(b =>
+      b.classList.toggle('active', b.dataset.theme === key));
+    repaintFrame();
+    renderDesign();
+  }
+
+  // The root-5 scaffold is drawn once, outside the live design layer, so it
+  // needs its stroke swapped in place rather than rebuilt.
+  function repaintFrame() {
+    document.querySelectorAll('#geom > g:first-child *').forEach(el =>
+      el.setAttribute('stroke', FAINT));
   }
 
   // ── spawn / remove ───────────────────────────────────────────────────────────
@@ -610,10 +802,14 @@
     */
 
     buildToggle(cx, cy, W);
-    // Set the active pattern without rendering twice, then render once
-    // (now that the svg is in the DOM, getBBox/getTotalLength are reliable).
+    // Mark the active pattern + palette without rendering twice, then render
+    // once (now that the svg is in the DOM, getBBox/getTotalLength are
+    // reliable). The frame above was built with whatever FAINT currently holds,
+    // so it already matches the live theme.
     document.querySelectorAll('#geom-toggle [data-variant]').forEach(b =>
       b.classList.toggle('active', +b.dataset.variant === currentVariant));
+    document.querySelectorAll('#geom-toggle [data-theme]').forEach(b =>
+      b.classList.toggle('active', b.dataset.theme === currentTheme));
     renderDesign();
   }
 
@@ -885,3 +1081,4 @@
 
 </body>
 </html>
+
