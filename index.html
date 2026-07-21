@@ -12,6 +12,9 @@
        ornament with the matching stroke colours. Defaults = "Paper". */
     :root {
       --bg:          #fff;
+      /* Flat stand-in for --bg, for small surfaces (the control dock) where a
+         gradient ground would render as a bright blob rather than a field. */
+      --surface:     #fff;
       --text:        #111;
       --text-dim:    #606060;
       --tg-head:     #cfcfcf;
@@ -117,14 +120,91 @@
        Remove this rule to restore them. */
     .content-panel { display: none !important; }
 
-    /* Pattern + palette toggle */
-    #geom-toggle {
+    /* ── Control dock ──────────────────────────────────────────────────────
+       Pattern / palette / opening, folded into one pop-up anchored to the
+       lower-left corner. The chevron is the handle; the panel stacks above it
+       so it opens upward into empty space rather than over the figure. Nothing
+       here closes on a selection — the dock stays open until the chevron,
+       Escape, or a tap outside dismisses it, so several choices can be made in
+       one pass. */
+    /* The dock's own box is only ever the chevron — the panel is taken out of
+       flow so a closed dock isn't a tall invisible rectangle sitting over the
+       lower-left of the page, swallowing the taps that are supposed to dismiss
+       it (visibility:hidden still reserves layout). */
+    #geom-dock {
       position: fixed;
+      left: max(14px, env(safe-area-inset-left, 0px));
+      bottom: max(14px, env(safe-area-inset-bottom, 0px));
+      z-index: 56;
+      width: 44px;
+      height: 44px;
+    }
+
+    #geom-chevron {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;              /* full touch target, not just the glyph */
+      height: 44px;
+      padding: 0;
+      background: var(--surface);
+      border: 1px solid var(--tg-head);
+      border-radius: 50%;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.45s ease, border-color 0.2s ease;
+    }
+    #geom-chevron svg {
+      display: block;
+      transition: transform 0.25s ease;
+    }
+    #geom-chevron polyline {
+      stroke: var(--tg-idle);
+      transition: stroke 0.2s ease;
+    }
+    #geom-chevron:hover polyline { stroke: var(--tg-hover); }
+    #geom-dock.open #geom-chevron { border-color: var(--tg-hover); }
+    #geom-dock.open #geom-chevron polyline { stroke: var(--tg-active); }
+    #geom-dock.open #geom-chevron svg { transform: rotate(180deg); }
+
+    #geom-toggle {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 10px);   /* stacked on the chevron, opening upward */
       display: flex;
       flex-direction: column;
       gap: 22px;
-      z-index: 56;
+      padding: 18px 22px 18px 14px;
+      background: var(--surface);
+      border: 1px solid var(--tg-head);
+      /* Sized by its content, not by the 44px dock it hangs off, and never
+         wider than the phone it is on. */
+      width: max-content;
+      max-width: calc(100vw - 28px);
+      /* Short screens: the stack scrolls inside the pop-up rather than
+         growing off the top of the viewport. */
+      max-height: calc(100dvh - 96px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(10px);
+      transform-origin: 0 100%;
+      transition: opacity 0.22s ease, transform 0.22s ease,
+                  background 0.45s ease, visibility 0s linear 0.22s;
     }
+    #geom-dock.open #geom-toggle {
+      opacity: 1;
+      visibility: visible;
+      transform: none;
+      transition: opacity 0.22s ease, transform 0.22s ease,
+                  background 0.45s ease, visibility 0s;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #geom-toggle, #geom-chevron svg { transition: none; }
+    }
+
     .tg-group {
       display: flex;
       flex-direction: column;
@@ -149,7 +229,18 @@
       cursor: pointer;
       padding: 2px 0 2px 10px;
       text-align: left;
+      -webkit-tap-highlight-color: transparent;
       transition: color 0.2s ease, border-color 0.2s ease;
+    }
+    /* Touch: hover never fires, so the rows need to be thumb-sized instead. */
+    @media (pointer: coarse) {
+      #geom-toggle button {
+        padding-top: 10px;
+        padding-bottom: 10px;
+        padding-right: 8px;   /* the row, not just the word, is the target */
+      }
+      #geom-toggle { gap: 18px; }
+      .tg-group { gap: 6px; }
     }
     #geom-toggle button:hover { color: var(--tg-hover); }
     #geom-toggle button.active {
@@ -223,6 +314,57 @@
     .menu-half {
       position: fixed;
       z-index: 61;
+      pointer-events: none;
+    }
+
+    /* Opening-motif furniture. Each of these is transient: created when a
+       section opens, removed when its animation finishes. */
+
+    /* SHARDS — the panel is rebuilt as N full-width copies of the content, each
+       clipped to one vertical strip, so the strips can arrive independently and
+       lock into a single continuous page. */
+    .bio-shard {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: var(--panel-bg);
+      transition: background 0.45s ease;
+    }
+
+    /* PANDORA — the lid is an opaque copy of the column that hinges away from
+       the top edge, and the motes are what escapes when it lifts. */
+    #bio-lid {
+      position: fixed;
+      z-index: 59;
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--panel-rule);
+      transform-origin: top center;
+      pointer-events: none;
+    }
+    .mote {
+      position: fixed;
+      z-index: 63;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      pointer-events: none;
+    }
+
+    /* IRIS — shockwave rings that chase the aperture outward. */
+    .iris-ring {
+      position: fixed;
+      z-index: 57;
+      /* Hairline: the rings read as pressure waves, not as drawn circles.
+         The ring is scaled up ~3x on its way out and the border scales with
+         it, so final rendered thickness is this value x that scale. Kept at
+         0.5px rather than a smaller number because sub-pixel border widths
+         round to the device pixel grid at layout — below ~0.5px the ring can
+         round to nothing and vanish on a 1x display. Thinner than this is
+         bought by starting the ring larger (see the iris motif) so it needs
+         less scaling, not by shrinking this further. */
+      border: 0.5px solid var(--text-dim);
+      border-radius: 50%;
       pointer-events: none;
     }
 
@@ -318,6 +460,7 @@
       sw:    ['#ffffff', 'rgba(120,120,120,0.55)'],
       vars: {
         '--bg': '#fff',
+        '--surface': '#fff',
         '--text': '#111',
         '--text-dim': '#606060',
         '--tg-head': '#cfcfcf',
@@ -340,6 +483,7 @@
         // Not flat: the pigment pools darker at the edges, as it does in the
         // painting the palette is taken from.
         '--bg': 'radial-gradient(ellipse at 50% 34%, #1a2cc4 0%, #0c168f 58%, #050a3c 100%)',
+        '--surface': '#101fa4',
         '--text': '#f3efe1',
         '--text-dim': '#cbb684',
         '--tg-head': '#5d72c4',
@@ -360,6 +504,7 @@
       sw:    ['#efe9dc', 'rgba(15,122,134,0.85)'],
       vars: {
         '--bg': '#efe9dc',
+        '--surface': '#efe9dc',
         '--text': '#123f47',
         '--text-dim': '#3f8f96',
         '--tg-head': '#c3b7a2',
@@ -380,6 +525,7 @@
       sw:    ['#080b0f', 'rgba(79,217,196,0.85)'],
       vars: {
         '--bg': 'radial-gradient(ellipse at 50% 40%, #111820 0%, #05070a 78%)',
+        '--surface': '#0b1116',
         '--text': '#e6f5f1',
         '--text-dim': '#4fd9c4',
         '--tg-head': '#3a444e',
@@ -569,13 +715,38 @@
   }
 
   // ── toggle UI ────────────────────────────────────────────────────────────────
-  function buildToggle(cx, cy, W) {
+  //
+  // One dock in the lower-left corner: a chevron handle and the pop-up stack of
+  // all three control groups. The dock is rebuilt with the backdrop on resize,
+  // so its open/closed state lives out here alongside the other choices that
+  // have to survive a rebuild.
+  let dockOpen = false;
+
+  function setDock(open) {
+    dockOpen = open;
+    document.getElementById('geom-dock')?.classList.toggle('open', open);
+    document.getElementById('geom-chevron')
+      ?.setAttribute('aria-expanded', String(open));
+  }
+
+  // Reflect the current choice on one group's buttons, for both the eye and
+  // assistive tech. dataset values are strings, hence the coercion.
+  function markActive(attr, val) {
+    document.querySelectorAll(`#geom-toggle [data-${attr}]`).forEach(b => {
+      const on = b.dataset[attr] === String(val);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  function buildToggle() {
+    const dock = document.createElement('div');
+    dock.id = 'geom-dock';
+
     const wrap = document.createElement('div');
     wrap.id = 'geom-toggle';
-    // "Ultramarine" + its swatch is the widest label; give the stack room so it
-    // never crowds the root-5 column.
-    wrap.style.left = Math.max(14, cx - W / 2 - 172) + 'px';
-    wrap.style.top  = '14px';   // re-centred below, once it has a measured height
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', 'Backdrop controls');
 
     const group = (title, btns) => {
       const sec = document.createElement('div');
@@ -589,8 +760,12 @@
     };
     const button = (name, sub, attr, val, handler) => {
       const b = document.createElement('button');
+      b.type = 'button';
       b.dataset[attr] = val;
       b.innerHTML = sub ? `${name}<small>${sub}</small>` : name;
+      // Deliberately does not close the dock: pattern, palette and opening are
+      // usually chosen together, and re-opening between each would make that a
+      // chore. Dismissal is always an explicit act.
       b.addEventListener('click', e => { e.stopPropagation(); handler(val); });
       return b;
     };
@@ -612,12 +787,41 @@
       return b;
     }));
 
-    document.body.appendChild(wrap);
-    // Centre the stack on the figure. Measured rather than assumed, so adding
-    // or removing a group keeps it aligned. (A translateY(-50%) would be
-    // simpler but fadeBackdrop animates this element's transform.)
-    wrap.style.top = Math.max(14, cy - wrap.offsetHeight / 2) + 'px';
+    group('Opening', Object.entries(OPENINGS).map(([key, o]) =>
+      button(o.label, o.sub, 'opening', key, setOpening)));
+
+    const chev = document.createElement('button');
+    chev.id = 'geom-chevron';
+    chev.type = 'button';
+    chev.setAttribute('aria-label', 'Backdrop controls');
+    chev.setAttribute('aria-controls', 'geom-toggle');
+    chev.setAttribute('aria-expanded', String(dockOpen));
+    chev.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <polyline points="4.5,12.5 10,7 15.5,12.5"
+                  stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    chev.addEventListener('click', e => { e.stopPropagation(); setDock(!dockOpen); });
+
+    // Panel first, handle second: the dock is anchored by its bottom edge, so
+    // the stack grows upward off the chevron.
+    dock.append(wrap, chev);
+    document.body.appendChild(dock);
+    setDock(dockOpen);   // a resize rebuild keeps the dock as the user left it
   }
+
+  // Dismissal, the two ways that aren't the chevron. Bound once, at the
+  // document level, so a backdrop rebuild doesn't stack up duplicate handlers.
+  document.addEventListener('pointerdown', e => {
+    if (dockOpen && !document.getElementById('geom-dock')?.contains(e.target))
+      setDock(false);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && dockOpen) {
+      setDock(false);
+      document.getElementById('geom-chevron')?.focus();
+    }
+  });
 
   // Distance from centre to the element's farthest extent — its "reach".
   function radiusKey(el) {
@@ -686,8 +890,7 @@
 
   function setVariant(v) {
     currentVariant = v;
-    document.querySelectorAll('#geom-toggle [data-variant]').forEach(b =>
-      b.classList.toggle('active', +b.dataset.variant === v));
+    markActive('variant', v);
     renderDesign();
   }
 
@@ -704,8 +907,7 @@
       document.documentElement.style.setProperty(prop, val);
     INK   = t.ink;
     FAINT = t.faint;
-    document.querySelectorAll('#geom-toggle [data-theme]').forEach(b =>
-      b.classList.toggle('active', b.dataset.theme === key));
+    markActive('theme', key);
     repaintFrame();
     renderDesign();
   }
@@ -801,22 +1003,21 @@
     document.body.appendChild(hit);
     */
 
-    buildToggle(cx, cy, W);
+    buildToggle();
     // Mark the active pattern + palette without rendering twice, then render
     // once (now that the svg is in the DOM, getBBox/getTotalLength are
     // reliable). The frame above was built with whatever FAINT currently holds,
     // so it already matches the live theme.
-    document.querySelectorAll('#geom-toggle [data-variant]').forEach(b =>
-      b.classList.toggle('active', +b.dataset.variant === currentVariant));
-    document.querySelectorAll('#geom-toggle [data-theme]').forEach(b =>
-      b.classList.toggle('active', b.dataset.theme === currentTheme));
+    markActive('variant', currentVariant);
+    markActive('theme', currentTheme);
+    markActive('opening', currentOpening);
     renderDesign();
   }
 
   function removeGeometry() {
     document.getElementById('geom')?.remove();
     document.getElementById('close-btn')?.remove();
-    document.getElementById('geom-toggle')?.remove();
+    document.getElementById('geom-dock')?.remove();
     document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
   }
 
@@ -879,7 +1080,11 @@
 
   let beamOpen = false;
   let bioHalves = [];
+  let currentOpening = 'beam';     // persists across open/close, like the rest
+  let beamMotif = null;            // the motif the open panel arrived with
   const BIO_MS = 375;
+  const EASE_IO = 'cubic-bezier(0.4, 0, 0.2, 1)';
+  const EASE_OUT_BACK = 'cubic-bezier(0.16, 1.1, 0.3, 1)';
 
   // clip-path keyframes; point order is [bottom-left, top-left, top-right,
   // bottom-right] throughout so the polygon interpolates cleanly. The apex is
@@ -898,7 +1103,7 @@
   }
 
   function fadeBackdrop(out) {
-    ['geom', 'geom-toggle'].forEach(id => {
+    ['geom', 'geom-dock'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.style.pointerEvents = out ? 'none' : '';
@@ -912,27 +1117,273 @@
     });
   }
 
-  // Two fixed clones of the menu, each clipped to one half of the centre
-  // line, sliding apart to the final column edges as the beam opens.
-  function splitMenu() {
+  // ── Opening motifs ──────────────────────────────────────────────────────────
+  //
+  // Four ways for a section to arrive in the root-5 column. Each motif owns
+  // three things and nothing else:
+  //
+  //   menuOut()      — how the menu gets out of the way. Returns the transient
+  //                    clones it made; each carries its own outbound keyframes
+  //                    on `_kf`, which closeBeam() plays in reverse. That is
+  //                    why every motif's menu keyframes must be symmetrical
+  //                    (transform + opacity only, no one-way filters).
+  //   open(panel, c) — how the panel arrives. `c` is the column rect.
+  //   close(panel,c) — how it leaves. Returns the animation whose end means
+  //                    "the panel may now be removed".
+  //
+  // Anything extra a motif needs (a lid, motes, shockwave rings) it creates and
+  // disposes of itself; openBeam/closeBeam know nothing about them.
+
+  // A fixed, pointer-transparent copy of the menu, optionally clipped.
+  function menuClone(clip) {
     const r = btn.getBoundingClientRect();
-    const dx = dr * 2 * 0.46;
-    return ['left', 'right'].map(side => {
-      const half = document.createElement('div');
-      half.className = 'menu-half';
-      half.style.left = r.left + 'px';
-      half.style.top = r.top + 'px';
-      half.style.width = r.width + 'px';
-      half.style.height = r.height + 'px';
-      half.style.clipPath = side === 'left' ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
-      half.appendChild(btn.cloneNode(true));
-      document.body.appendChild(half);
-      half.animate([
-        { transform: 'translateX(0)', opacity: 1 },
-        { transform: `translateX(${side === 'left' ? -dx : dx}px)`, opacity: 0 },
-      ], { duration: BIO_MS, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
-      return half;
-    });
+    const el = document.createElement('div');
+    el.className = 'menu-half';
+    el.style.left = r.left + 'px';
+    el.style.top = r.top + 'px';
+    el.style.width = r.width + 'px';
+    el.style.height = r.height + 'px';
+    if (clip) el.style.clipPath = clip;
+    el.appendChild(btn.cloneNode(true));
+    document.body.appendChild(el);
+    return el;
+  }
+  // Record the outbound keyframes on the clone, then play them.
+  function menuExit(el, kf, ms = BIO_MS, easing = EASE_IO) {
+    el._kf = kf;
+    el.animate(kf, { duration: ms, easing, fill: 'forwards' });
+    return el;
+  }
+
+  // Copy the panel's content into n full-width layers, each clipped to one
+  // vertical strip. Together they look exactly like the undivided panel.
+  function shardStrips(panel, n) {
+    const inner = panel.innerHTML;
+    panel.innerHTML = '';
+    panel.style.background = 'transparent';
+    const strips = [];
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('div');
+      s.className = 'bio-shard';
+      s.style.clipPath = `inset(0 ${f2(100 - (i + 1) * 100 / n)}% 0 ${f2(i * 100 / n)}%)`;
+      s.innerHTML = inner;
+      panel.appendChild(s);
+      strips.push(s);
+    }
+    return strips;
+  }
+
+  const OPENINGS = {
+    // I. BEAM — the searchlight. A seam shoots up the centre line, the top
+    // spreads, then the base follows and the column fills.
+    beam: {
+      label: 'Beam',
+      sub: 'searchlight',
+      menuOut() {
+        const dx = dr * 2 * 0.46;
+        return ['left', 'right'].map((side, i) => menuExit(
+          menuClone(i ? 'inset(0 0 0 50%)' : 'inset(0 50% 0 0)'),
+          [{ transform: 'translateX(0)', opacity: 1 },
+           { transform: `translateX(${i ? dx : -dx}px)`, opacity: 0 }]));
+      },
+      open(panel) {
+        panel.style.clipPath = BIO_CLIPS[0];
+        panel.animate([
+          { clipPath: BIO_CLIPS[0], offset: 0,    easing: 'ease-in' },
+          { clipPath: BIO_CLIPS[1], offset: 0.2,  easing: 'ease-in-out' },
+          { clipPath: BIO_CLIPS[2], offset: 0.45, easing: 'ease-out' },
+          { clipPath: BIO_CLIPS[3], offset: 1 },
+        ], { duration: BIO_MS + 100, fill: 'forwards' });
+      },
+      close(panel) {
+        return panel.animate([
+          { clipPath: BIO_CLIPS[3], offset: 0,    easing: 'ease-in' },
+          { clipPath: BIO_CLIPS[2], offset: 0.55, easing: 'ease-in-out' },
+          { clipPath: BIO_CLIPS[1], offset: 0.8,  easing: 'ease-out' },
+          { clipPath: BIO_CLIPS[0], offset: 1 },
+        ], { duration: 225, fill: 'forwards' });
+      },
+    },
+
+    // II. PANDORA — the column is a closed box. The lid hinges back off the top
+    // edge, what was shut inside escapes upward as motes, and the page beneath
+    // is revealed by the lid's own departure.
+    pandora: {
+      label: 'Pandora',
+      sub: 'lid + escape',
+      menuOut() {
+        // The menu is what was in the box: it flies up and out with the motes.
+        return [menuExit(menuClone(), [
+          { transform: 'translateY(0) scale(1) rotate(0deg)', opacity: 1 },
+          { transform: 'translateY(-150px) scale(0.55) rotate(-6deg)', opacity: 0 },
+        ], BIO_MS + 120, 'cubic-bezier(0.3, 0, 0.2, 1)')];
+      },
+      open(panel, c) {
+        // Content rises into the opened box.
+        panel.style.clipPath = 'inset(0 0 0 0)';
+        panel.animate([
+          { opacity: 0, transform: 'translateY(26px) scale(0.97)' },
+          { opacity: 1, transform: 'translateY(0) scale(1)' },
+        ], { duration: 340, delay: 190, easing: EASE_OUT_BACK, fill: 'both' });
+
+        const lid = document.createElement('div');
+        lid.id = 'bio-lid';
+        Object.assign(lid.style, {
+          left: c.left + 'px', top: c.top + 'px',
+          width: c.W + 'px', height: c.H + 'px',
+        });
+        document.body.appendChild(lid);
+        const off = lid.animate([
+          { transform: 'perspective(1400px) rotateX(0deg)', opacity: 1, offset: 0, easing: 'cubic-bezier(0.5, 0, 0.75, 0)' },
+          { transform: 'perspective(1400px) rotateX(-14deg)', opacity: 1, offset: 0.22 },
+          { transform: 'perspective(1400px) rotateX(-104deg)', opacity: 0, offset: 1 },
+        ], { duration: BIO_MS + 165, easing: EASE_IO, fill: 'forwards' });
+        off.onfinish = () => lid.remove();
+
+        // Motes: released along the lid's hinge line, scattering up and out.
+        for (let i = 0; i < 20; i++) {
+          const m = document.createElement('div');
+          m.className = 'mote';
+          const x = c.left + c.W * (0.08 + 0.84 * Math.random());
+          m.style.left = x + 'px';
+          m.style.top = (c.top + 6) + 'px';
+          const s = 0.35 + Math.random() * 0.9;
+          m.style.width = m.style.height = f2(6 * s) + 'px';
+          document.body.appendChild(m);
+          const dx = (x - (c.left + c.W / 2)) * 0.5 + (Math.random() - 0.5) * 90;
+          const a = m.animate([
+            { transform: 'translate(0, 0) scale(0.2)', opacity: 0 },
+            { transform: `translate(${f2(dx * 0.3)}px, -${f2(40 + Math.random() * 40)}px) scale(1)`, opacity: 0.9, offset: 0.35 },
+            { transform: `translate(${f2(dx)}px, -${f2(150 + Math.random() * 190)}px) scale(0.25)`, opacity: 0 },
+          ], { duration: 700 + Math.random() * 550, delay: 90 + Math.random() * 260, easing: 'cubic-bezier(0.2, 0.6, 0.3, 1)', fill: 'forwards' });
+          a.onfinish = () => m.remove();
+        }
+      },
+      close(panel) {
+        // The box shuts: content sinks, the field closes down from the top.
+        return panel.animate([
+          { clipPath: 'inset(0 0 0 0)', opacity: 1, transform: 'translateY(0)' },
+          { clipPath: 'inset(0 0 100% 0)', opacity: 0.9, transform: 'translateY(14px)' },
+        ], { duration: 250, easing: 'cubic-bezier(0.5, 0, 0.75, 0)', fill: 'forwards' });
+      },
+    },
+
+    // III. IRIS — a camera aperture at the menu's own centre dilates until it
+    // has swallowed the column, chased outward by shockwave rings.
+    iris: {
+      label: 'Iris',
+      sub: 'aperture dilate',
+      menuOut() {
+        // Sucked into the aperture it opened.
+        return [menuExit(menuClone(), [
+          { transform: 'scale(1) rotate(0deg)', opacity: 1 },
+          { transform: 'scale(0.15) rotate(28deg)', opacity: 0 },
+        ], 300, 'cubic-bezier(0.55, 0, 0.85, 0.2)')];
+      },
+      open(panel, c) {
+        // Aperture centre = the menu's centre, in the panel's own coordinates.
+        const px = f2(dcx - c.left), py = f2(dcy - c.top);
+        const R = f2(Math.hypot(Math.max(px, c.W - px), Math.max(py, c.H - py)));
+        panel.style.clipPath = `circle(0px at ${px}px ${py}px)`;
+        panel.animate([
+          { clipPath: `circle(0px at ${px}px ${py}px)` },
+          { clipPath: `circle(${R}px at ${px}px ${py}px)` },
+        ], { duration: BIO_MS + 165, easing: 'cubic-bezier(0.22, 0.9, 0.25, 1)', fill: 'forwards' });
+        // Inner content counter-rotates in, the way a lens settles.
+        panel.firstElementChild?.animate([
+          { opacity: 0, transform: 'scale(1.06) rotate(2.5deg)' },
+          { opacity: 1, transform: 'scale(1) rotate(0deg)' },
+        ], { duration: 400, delay: 120, easing: EASE_IO, fill: 'both' });
+
+        // Ring thickness = the CSS border x whatever scale the ring is at, so
+        // a large base diameter (little scaling needed) buys a finer line than
+        // a small one blown up. `d` is the thinness dial; `seed` holds the
+        // visible starting size fixed at 8px however large `d` gets.
+        const d = 160, seed = 8;   // 0.5px x (2R/160) = half the previous line
+        for (let i = 0; i < 3; i++) {
+          const ring = document.createElement('div');
+          ring.className = 'iris-ring';
+          Object.assign(ring.style, {
+            left: f2(dcx - d / 2) + 'px', top: f2(dcy - d / 2) + 'px',
+            width: d + 'px', height: d + 'px',
+          });
+          document.body.appendChild(ring);
+          const a = ring.animate([
+            { transform: `scale(${f2(seed / d)})`, opacity: 0.55 },
+            { transform: `scale(${f2(R * 2 / d)})`, opacity: 0 },
+          ], { duration: 620, delay: i * 110, easing: 'cubic-bezier(0.1, 0.7, 0.3, 1)', fill: 'forwards' });
+          a.onfinish = () => ring.remove();
+        }
+      },
+      close(panel, c) {
+        const px = f2(dcx - c.left), py = f2(dcy - c.top);
+        const R = f2(Math.hypot(Math.max(px, c.W - px), Math.max(py, c.H - py)));
+        return panel.animate([
+          { clipPath: `circle(${R}px at ${px}px ${py}px)` },
+          { clipPath: `circle(0px at ${px}px ${py}px)` },
+        ], { duration: 260, easing: 'cubic-bezier(0.7, 0, 0.8, 0.3)', fill: 'forwards' });
+      },
+    },
+
+    // IV. SHARDS — the page arrives already broken: narrow vertical slats fall
+    // in from alternating directions and lock into one continuous column, the
+    // way a tile panel is set piece by piece. The per-slat stagger is scaled to
+    // the count so the whole set still lands in ~400ms however many there are.
+    shards: {
+      label: 'Shards',
+      sub: 'strips lock in',
+      n: 56,        // hairline slats: ~8px wide in a 480px column
+      menuOut() {
+        return [menuExit(menuClone(), [
+          { transform: 'scale(1)', opacity: 1 },
+          { transform: 'scale(1.35)', opacity: 0 },
+        ], 260, 'cubic-bezier(0.5, 0, 0.9, 0.4)')];
+      },
+      open(panel, c) {
+        panel.style.clipPath = 'inset(0 0 0 0)';
+        const step = 385 / this.n;
+        shardStrips(panel, this.n).forEach((s, i) => {
+          const up = i % 2 === 0;
+          s.animate([
+            { transform: `translateY(${up ? -c.H : c.H}px)`, opacity: 0 },
+            { transform: 'translateY(0)', opacity: 1 },
+          ], {
+            duration: 430,
+            delay: Math.round(i * step),
+            easing: EASE_OUT_BACK,
+            fill: 'both',
+          });
+        });
+      },
+      close(panel, c) {
+        const strips = Array.from(panel.children);
+        const mid = (strips.length - 1) / 2;
+        const step = 105 / Math.max(mid, 1);
+        let last = null, lastDelay = -1;
+        strips.forEach((s, i) => {
+          const up = i % 2 === 0;
+          // outside-in, so the column collapses toward its centre line
+          const delay = Math.round((mid - Math.abs(i - mid)) * step);
+          const anim = s.animate([
+            { transform: 'translateY(0)', opacity: 1 },
+            { transform: `translateY(${up ? -c.H : c.H}px)`, opacity: 0 },
+          ], {
+            duration: 260,
+            delay,
+            easing: 'cubic-bezier(0.5, 0, 0.9, 0.4)',
+            fill: 'forwards',
+          });
+          if (delay > lastDelay) { lastDelay = delay; last = anim; }
+        });
+        return last;
+      },
+    },
+  };
+
+  function setOpening(key) {
+    if (!OPENINGS[key]) return;
+    currentOpening = key;
+    markActive('opening', key);
   }
 
   function layoutBioClose(close) {
@@ -945,17 +1396,20 @@
     if (beamOpen) return;
     beamOpen = true;
 
+    // Latched for the lifetime of this panel: switching the toggle while a
+    // section is open must not close it with a motif it never opened with.
+    const motif = beamMotif = OPENINGS[currentOpening] || OPENINGS.beam;
     fadeBackdrop(true);
     btn.style.visibility = 'hidden';
-    bioHalves = splitMenu();
+    bioHalves = motif.menuOut();
 
-    const { left, top, W, H } = bioColumn();
+    const col = bioColumn();
+    const { left, top, W, H } = col;
     const panel = document.createElement('div');
     panel.id = 'bio-panel';
     Object.assign(panel.style, {
       left: left + 'px', top: top + 'px',
       width: W + 'px', height: H + 'px',
-      clipPath: BIO_CLIPS[0],
     });
     const content = BEAM_CONTENT[section];
     panel.innerHTML = `
@@ -964,12 +1418,10 @@
         ${content.html}
       </div>`;
     document.body.appendChild(panel);
-    panel.animate([
-      { clipPath: BIO_CLIPS[0], offset: 0,    easing: 'ease-in' },
-      { clipPath: BIO_CLIPS[1], offset: 0.2,  easing: 'ease-in-out' },
-      { clipPath: BIO_CLIPS[2], offset: 0.45, easing: 'ease-out' },
-      { clipPath: BIO_CLIPS[3], offset: 1 },
-    ], { duration: BIO_MS + 100, fill: 'forwards' });
+    // The panel is in the DOM and laid out; the motif takes it from here.
+    // Under reduced-motion the section simply is there, as the ornament simply
+    // is drawn.
+    if (!REDUCED_MOTION.matches) motif.open(panel, col);
 
     const close = document.createElement('button');
     close.id = 'bio-close';
@@ -991,24 +1443,23 @@
     beamOpen = false;
 
     document.getElementById('bio-close')?.remove();
+    document.getElementById('bio-lid')?.remove();
+
+    const motif = beamMotif || OPENINGS.beam;
+    beamMotif = null;
 
     const panel = document.getElementById('bio-panel');
     if (panel) {
-      const anim = panel.animate([
-        { clipPath: BIO_CLIPS[3], offset: 0,    easing: 'ease-in' },
-        { clipPath: BIO_CLIPS[2], offset: 0.55, easing: 'ease-in-out' },
-        { clipPath: BIO_CLIPS[1], offset: 0.8,  easing: 'ease-out' },
-        { clipPath: BIO_CLIPS[0], offset: 1 },
-      ], { duration: 225, fill: 'forwards' });
-      anim.onfinish = () => panel.remove();
+      const anim = REDUCED_MOTION.matches ? null : motif.close(panel, bioColumn());
+      if (anim) anim.onfinish = () => panel.remove();
+      else panel.remove();
     }
 
-    const dx = dr * 2 * 0.46;
-    bioHalves.forEach((half, i) => {
-      const anim = half.animate([
-        { transform: `translateX(${i === 0 ? -dx : dx}px)`, opacity: 0 },
-        { transform: 'translateX(0)', opacity: 1 },
-      ], { duration: 225, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
+    // Every motif's menu exit is stored on the clone as `_kf`; playing it
+    // backwards reassembles the menu however it came apart.
+    bioHalves.forEach(half => {
+      const anim = half.animate([...(half._kf || [])].reverse(),
+        { duration: 225, easing: EASE_IO, fill: 'forwards' });
       anim.onfinish = () => { half.remove(); btn.style.visibility = ''; };
     });
     bioHalves = [];
@@ -1030,7 +1481,7 @@
       if (!beamOpen) return;
       // The beam stays open across a resize: keep the freshly rebuilt
       // backdrop hidden and re-fit the panel + close button to the new column.
-      ['geom', 'geom-toggle'].forEach(id => {
+      ['geom', 'geom-dock'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
       });
