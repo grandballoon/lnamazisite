@@ -320,15 +320,27 @@
     /* Opening-motif furniture. Each of these is transient: created when a
        section opens, removed when its animation finishes. */
 
-    /* SHARDS — the panel is rebuilt as N full-width copies of the content, each
-       clipped to one vertical strip, so the strips can arrive independently and
-       lock into a single continuous page. */
+    /* SHARDS — the panel is rebuilt as N narrow vertical strips, so the strips
+       can arrive independently and lock into a single continuous page. Each
+       strip is a box one strip wide holding a full-width copy of the content
+       pushed left by that strip's own offset; the strip's overflow does the
+       cutting. Deliberately NOT N full-width boxes clipped down to a strip:
+       that shape costs a full column layout and a full-column compositor
+       texture per shard, which at n=56 is enough to blow Chrome's layer
+       budget on a phone. Box == strip keeps both at ~1/n. */
     .bio-shard {
       position: absolute;
-      inset: 0;
+      top: 0;
+      bottom: 0;
       overflow: hidden;
       background: var(--panel-bg);
       transition: background 0.45s ease;
+    }
+    /* left/width are per-strip and set inline. */
+    .bio-shard-content {
+      position: absolute;
+      top: 0;
+      height: 100%;
     }
 
     /* PANDORA — the lid is an opaque copy of the column that hinges away from
@@ -854,14 +866,23 @@
       return;
     }
     // Set the dash gap once, then let the Web Animations API interpolate the
-    // offset from "fully hidden" to 0 inside this element's window; it holds
-    // hidden before the window and fully drawn after, until the loop restarts.
+    // offset from "fully hidden" to "fully drawn" inside this element's window;
+    // it holds hidden before the window and fully drawn after, until the loop
+    // restarts.
+    //
+    // The dash pattern is [len on, len off], so the offset is periodic with
+    // period 2*len: `len` hides the stroke and `2*len` draws it whole, exactly
+    // as `-len` → `0` would. Stay on the positive side of that period —
+    // WebKit and Blink paint *opposite halves* of a shape for the same
+    // negative offset (measured: dasharray 300 / offset -150 inks [160,309] in
+    // Blink but [10,159] in WebKit), which made every element trace backwards
+    // in Safari and iOS. For positive offsets the two engines agree exactly.
     el.style.strokeDasharray = len;
     el.animate([
-      { strokeDashoffset: -len, offset: 0 },
-      { strokeDashoffset: -len, offset: o1, easing: 'ease' },
-      { strokeDashoffset: 0, offset: o2 },
-      { strokeDashoffset: 0, offset: 1 },
+      { strokeDashoffset: len, offset: 0 },
+      { strokeDashoffset: len, offset: o1, easing: 'ease' },
+      { strokeDashoffset: 2 * len, offset: o2 },
+      { strokeDashoffset: 2 * len, offset: 1 },
     ], opts);
   }
 
@@ -1155,18 +1176,35 @@
     return el;
   }
 
-  // Copy the panel's content into n full-width layers, each clipped to one
-  // vertical strip. Together they look exactly like the undivided panel.
+  // Cut the panel into n vertical strips. Each strip is a narrow box holding a
+  // full-width copy of the content shifted left by that strip's offset, so the
+  // n strips together look exactly like the undivided panel.
   function shardStrips(panel, n) {
     const inner = panel.innerHTML;
+    const W = panel.getBoundingClientRect().width;
+    // Snap the cuts to the device pixel grid so adjacent strips abut exactly:
+    // off-grid edges get antialiased and the seams show as faint vertical
+    // lines once the strips have landed. The last cut takes the remainder so
+    // the strips still sum to the full width.
+    const g = window.devicePixelRatio || 1;
+    const cut = i => (i === n ? W : Math.round(i * W / n * g) / g);
+    // Not f2: at dpr 3 a cut lands on a third of a pixel, and rounding that to
+    // 2dp puts the edge back off-grid — which is the whole thing being avoided.
+    const px = v => Number(v.toFixed(4));
     panel.innerHTML = '';
     panel.style.background = 'transparent';
     const strips = [];
     for (let i = 0; i < n; i++) {
+      const x = cut(i);
       const s = document.createElement('div');
       s.className = 'bio-shard';
-      s.style.clipPath = `inset(0 ${f2(100 - (i + 1) * 100 / n)}% 0 ${f2(i * 100 / n)}%)`;
-      s.innerHTML = inner;
+      s.style.left = px(x) + 'px';
+      s.style.width = px(cut(i + 1) - x) + 'px';
+      // Only the first copy is the real content; the rest are decoration and
+      // are marked inert, or the section is announced n times and every strip
+      // contributes its own tab stop for the contact link.
+      s.innerHTML = `<div class="bio-shard-content"${i ? ' inert' : ''}` +
+                    ` style="left:${px(-x)}px;width:${px(W)}px">${inner}</div>`;
       panel.appendChild(s);
       strips.push(s);
     }
