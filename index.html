@@ -113,7 +113,7 @@
 
     .content-panel.active { display: block; }
     #panel-work    { background: #1d4ed8; }
-    #panel-bio     { background: #b91c1c; }
+    #panel-about     { background: #b91c1c; }
     #panel-contact { background: #15803d; }
 
     /* TEMP: hide the colored content panels while watching the animation.
@@ -258,7 +258,9 @@
 
     /* Palette buttons carry a swatch of their own ground + ornament ink, so the
        scheme is legible before you commit to it. */
-    #geom-toggle button[data-theme] {
+    #geom-toggle button[data-theme],
+    #geom-toggle button[data-ink],
+    #geom-toggle button[data-text] {
       display: flex;
       align-items: center;
       gap: 9px;
@@ -273,8 +275,78 @@
                   inset 0 0 0 4px var(--sw-ink);
     }
 
-    /* BIO beam split */
-    #bio-panel {
+    /* A palette's ink sub-variants, nested under its row. Collapsed rather than
+       removed: the dock keeps one DOM shape whatever palette is live, and the
+       reveal can be animated. Closed, the negative margin cancels the parent
+       group's gap so a zero-height row doesn't leave a double space behind. */
+    .tg-sub {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: -10px;
+      margin-left: 12px;
+      padding-left: 11px;
+      border-left: 1px solid var(--tg-head);
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      /* `inert` alone would do it on current browsers; the delayed visibility
+         flip is what actually pulls the collapsed rows out of the tab order
+         everywhere, and it is the same trick the dock itself uses. */
+      visibility: hidden;
+      transition: max-height 0.28s ease, opacity 0.2s ease,
+                  margin-top 0.28s ease, border-color 0.45s ease,
+                  visibility 0s linear 0.28s;
+    }
+    .tg-sub.open {
+      /* Clears both axes — ten thumb-sized rows plus two headings — on coarse
+         pointers. Overshoot only affects the easing curve, and the dock itself
+         already scrolls when the whole stack outgrows a short viewport. */
+      max-height: 620px;
+      opacity: 1;
+      margin-top: 2px;
+      visibility: visible;
+      transition: max-height 0.28s ease, opacity 0.2s ease,
+                  margin-top 0.28s ease, border-color 0.45s ease,
+                  visibility 0s;
+    }
+    /* The two axes inside a sub-list — ornament and text — stacked with a
+       little more air between them than between their own rows, so the pair
+       reads as two lists rather than one long one. */
+    .tg-axis {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tg-axis + .tg-axis { margin-top: 12px; }
+    .tg-subhead {
+      font-size: 0.54rem;
+      letter-spacing: 0.16em;
+      padding-left: 0;
+      margin-bottom: 0;
+    }
+    #geom-toggle .tg-sub button {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+    }
+    #geom-toggle .tg-sub .sw {
+      width: 10px;
+      height: 10px;
+      box-shadow: inset 0 0 0 1px rgba(128,128,128,0.35),
+                  inset 0 0 0 3px var(--sw-ink);
+    }
+    /* .tg-group's gap drops to 6px on touch, so the closed-state cancel has to
+       drop with it or the next palette row rides up into this one. */
+    @media (pointer: coarse) {
+      .tg-sub { gap: 4px; margin-top: -6px; }
+      .tg-axis { gap: 4px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .tg-sub { transition: none; }
+    }
+
+    /* ABOUT beam split */
+    #about-panel {
       position: fixed;
       z-index: 58;
       background: var(--panel-bg);
@@ -282,34 +354,57 @@
       overflow-y: auto;
       transition: background 0.45s ease, color 0.45s ease;
     }
-    #bio-panel .bio-inner {
+    #about-panel .about-inner {
       max-width: 32em;
       margin: 0 auto;
       padding: 3.5rem 2.25rem 4rem;
     }
-    #bio-panel h2 {
+    #about-panel h2 {
       font-size: 1.05rem;
       font-weight: 600;
       letter-spacing: 0.18em;
       margin-bottom: 1.6rem;
     }
-    #bio-panel p {
+    #about-panel p {
       font-size: 0.9rem;
       line-height: 1.75;
     }
-    #bio-panel p + p { margin-top: 1em; }
-    #bio-panel .contact-email {
+    #about-panel p + p { margin-top: 1em; }
+    #about-panel .contact-email {
       font-size: 1.15rem;
       letter-spacing: 0.04em;
       margin-top: 1.4em;
     }
-    #bio-panel .contact-email a {
+    #about-panel .contact-email a {
       color: var(--panel-text);
       text-decoration: none;
       border-bottom: 1px solid var(--panel-rule);
       transition: border-color 0.2s ease;
     }
-    #bio-panel .contact-email a:hover { border-bottom-color: var(--panel-text); }
+    #about-panel .contact-email a:hover { border-bottom-color: var(--panel-text); }
+
+    /* Panel ground — the root-5 construction traced faintly behind the open
+       section's text, looping on the same rhythm as the ornament out front.
+       Sticky + zero-height so the figure holds still while the panel scrolls
+       under it; negative z-index so it paints on the panel's background rather
+       than over the copy (the panel is position:fixed with a z-index, so it is
+       its own stacking context and the layer can't fall out the back of it).
+       currentColor, not the ornament's INK: that ink is tuned to the page's
+       ground, and the panel's is a different colour in every palette. */
+    #about-pulse {
+      position: sticky;
+      top: 0;
+      height: 0;
+      z-index: -1;
+      color: var(--panel-text);
+      pointer-events: none;
+    }
+    #about-pulse svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: block;
+    }
 
     .menu-half {
       position: fixed;
@@ -328,7 +423,7 @@
        that shape costs a full column layout and a full-column compositor
        texture per shard, which at n=56 is enough to blow Chrome's layer
        budget on a phone. Box == strip keeps both at ~1/n. */
-    .bio-shard {
+    .about-shard {
       position: absolute;
       top: 0;
       bottom: 0;
@@ -337,7 +432,7 @@
       transition: background 0.45s ease;
     }
     /* left/width are per-strip and set inline. */
-    .bio-shard-content {
+    .about-shard-content {
       position: absolute;
       top: 0;
       height: 100%;
@@ -345,7 +440,7 @@
 
     /* PANDORA — the lid is an opaque copy of the column that hinges away from
        the top edge, and the motes are what escapes when it lifts. */
-    #bio-lid {
+    #about-lid {
       position: fixed;
       z-index: 59;
       background: var(--panel-bg);
@@ -380,7 +475,7 @@
       pointer-events: none;
     }
 
-    #bio-close {
+    #about-close {
       position: fixed;
       z-index: 62;
       width: 40px;
@@ -392,15 +487,15 @@
       opacity: 0;
       transition: opacity 0.1s ease;
     }
-    #bio-close.visible { opacity: 1; }
-    #bio-close svg { display: block; }
-    #bio-close circle,
-    #bio-close line {
+    #about-close.visible { opacity: 1; }
+    #about-close svg { display: block; }
+    #about-close circle,
+    #about-close line {
       stroke: var(--close);
       transition: stroke 0.2s ease;
     }
-    #bio-close:hover circle,
-    #bio-close:hover line { stroke: var(--close-hover); }
+    #about-close:hover circle,
+    #about-close:hover line { stroke: var(--close-hover); }
   </style>
 </head>
 <body>
@@ -412,7 +507,7 @@
     <span></span>
     <div class="menu-labels">
       <p>WORK</p>
-      <p>BIO</p>
+      <p>ABOUT</p>
       <p>CONTACT</p>
     </div>
   </button>
@@ -449,14 +544,17 @@
 
   // ── Colour schemes ──────────────────────────────────────────────────────────
   //
-  // Four grounds for the same ornament. Each pairs a background with an ink the
+  // Five grounds for the same ornament. Each pairs a background with an ink the
   // tilework would actually have been laid in, so the geometry keeps reading as
   // architecture rather than decoration on a coloured box:
   //
   //   Paper       — the drawing-board state: graphite on white. The default.
   //   Ultramarine — lapis lazuli ground, the pigment ground from Badakhshan
   //                 stone and traded through Persia; ornament in leaf gold,
-  //                 type in unbleached bone.
+  //                 type in unbleached bone. Lit from behind the ornament.
+  //   Ultramarine — the same lapis with the centre bloom removed: one flat
+  //   Flat          value edge to edge, no implied light source. Shares the
+  //                 ornament and type variants with the lit ground.
   //   Ecru        — the tile palette itself: bone plaster ground, turquoise
   //                 glaze ink, terracotta setting-out lines.
   //   Obsidian    — the futurism pole: a black field with the ornament struck
@@ -464,6 +562,116 @@
   //
   // `ink`/`faint` are SVG stroke colours; everything else lands on :root as a
   // custom property. `sw` is the two-tone dot on the toggle button.
+
+  // Sub-variants over a lapis ground, shared by both ultramarine entries: the
+  // ink choices are a property of the pigment, not of how the ground is lit, so
+  // the two grounds offer the same five and remember them independently.
+  //
+  // Each entry carries two independent halves, and the dock exposes one
+  // selector per half:
+  //
+  //   ink / faint / swInk  → the ornament, and nothing else
+  //   vars                 → the type and the chrome that follows it
+  //
+  // Same table read twice, so the pairs still line up when you want them to
+  // (gold ornament + gold-accented bone type is the original scheme) but
+  // neither is chained to the other. `vars` merges over the theme's own set,
+  // so the ground and surface are never restated, and `gold` is the identity
+  // entry on both halves.
+  const LAPIS_INKS = {
+    gold: {
+      label: 'Leaf gold',
+      ink:   'rgba(236,199,120,0.58)',
+      faint: 'rgba(150,182,255,0.20)',
+      swInk: 'rgba(236,199,120,0.85)',
+      vars: {},
+    },
+    // The other half of Isfahan tilework. Lapis and turquoise sit together on
+    // every dome in the city; gold is the manuscript pairing, this is the
+    // architectural one, so the girih net reads as glaze not gilding.
+    turquoise: {
+      label: 'Turquoise',
+      ink:   'rgba(94,214,214,0.55)',
+      faint: 'rgba(126,196,214,0.18)',
+      swInk: 'rgba(94,214,214,0.85)',
+      vars: {
+        '--text': '#8ce6e6',
+        '--text-dim': '#5ed6d6',
+        '--tg-head': '#4a63b8',
+        '--tg-idle': '#7a92dd',
+        '--tg-hover': '#5ed6d6',
+        '--tg-active': '#e8f6f5',
+        '--panel-bg': '#e8f6f5',
+        '--panel-rule': '#3fa8ac',
+        '--close': '#5ed6d6',
+        '--close-hover': '#e8f6f5',
+      },
+    },
+    // No metal at all. The highest-contrast option, and the one closest to what
+    // the animation literally is: a compass-and-straightedge construction, read
+    // as a blueprint rather than a decorated object.
+    chalk: {
+      label: 'Chalk',
+      ink:   'rgba(255,255,255,0.44)',
+      faint: 'rgba(180,205,255,0.18)',
+      swInk: 'rgba(255,255,255,0.90)',
+      vars: {
+        '--text': '#ffffff',
+        '--text-dim': '#a8bdf0',
+        '--tg-hover': '#dce6ff',
+        '--tg-active': '#ffffff',
+        '--panel-bg': '#ffffff',
+        '--panel-rule': '#8fa4de',
+        '--close': '#a8bdf0',
+        '--close-hover': '#ffffff',
+      },
+    },
+    // Madder lake is period-correct; the pairing with lapis is not, which is
+    // the point. Softest of the set — the ornament recedes further behind the
+    // type than gold does.
+    madder: {
+      label: 'Madder rose',
+      ink:   'rgba(240,158,174,0.50)',
+      faint: 'rgba(190,150,200,0.18)',
+      swInk: 'rgba(240,158,174,0.85)',
+      vars: {
+        '--text': '#f5aabb',
+        '--text-dim': '#ea8fa4',
+        '--tg-head': '#6b6ec4',
+        '--tg-idle': '#9a93dd',
+        '--tg-hover': '#f09eae',
+        '--tg-active': '#fdeef1',
+        '--panel-bg': '#fdeef1',
+        '--panel-rule': '#c98494',
+        '--close': '#f09eae',
+        '--close-hover': '#fdeef1',
+      },
+    },
+    // Lapis + gold + cinnabar is the manuscript trio, so this is the most
+    // historically loaded of the five. Pulled toward saffron rather than true
+    // vermilion on purpose: a red that near-complementary to the ground at
+    // matched luminance visibly vibrates at these hairline stroke widths. The
+    // orange shift keeps the drama without the shimmer.
+    saffron: {
+      label: 'Saffron',
+      ink:   'rgba(235,140,70,0.55)',
+      faint: 'rgba(196,166,190,0.18)',
+      swInk: 'rgba(235,140,70,0.85)',
+      vars: {
+        '--text': '#f09e57',
+        '--text-dim': '#e2833c',
+        '--tg-head': '#6b6ec4',
+        '--tg-idle': '#8f92dd',
+        '--tg-hover': '#eb8c46',
+        '--tg-active': '#fdeadb',
+        '--panel-bg': '#fdeadb',
+        '--panel-rule': '#c07a3e',
+        '--close': '#eb8c46',
+        '--close-hover': '#fdeadb',
+      },
+    },
+  };
+
   const THEMES = {
     paper: {
       label: 'Paper',
@@ -496,7 +704,12 @@
         // painting the palette is taken from.
         '--bg': 'radial-gradient(ellipse at 50% 34%, #1a2cc4 0%, #0c168f 58%, #050a3c 100%)',
         '--surface': '#101fa4',
-        '--text': '#f3efe1',
+        // The type carries the ink's own hue rather than a near-white with a
+        // hint of it. Held around 70% lightness: enough chroma that the choice
+        // reads at rest, enough luminance to clear 4.5:1 against the lightest
+        // stop of the ground below (the labels are 2.3rem/600, so that is well
+        // inside AA). `--text-dim` is the hover — same hue, deeper.
+        '--text': '#eccb84',
         '--text-dim': '#cbb684',
         '--tg-head': '#5d72c4',
         '--tg-idle': '#8296dd',
@@ -508,6 +721,46 @@
         '--close': '#cbb684',
         '--close-hover': '#f3efe1',
       },
+      inks: LAPIS_INKS,
+    },
+    // The same pigment laid flat. Identical in every respect to the entry above
+    // except the ground: no centre stop, so nothing on the page reads as a
+    // light source and the field carries no vertical bias. The bloom above puts
+    // a soft lamp behind the ornament, which flatters it but also fixes where
+    // the eye lands; without it the geometry has to hold the composition on its
+    // own, and the type sits on one even value wherever it falls.
+    //
+    // #0c168f is the 58% stop of the lit ground — the pigment's own value,
+    // taken at the point the gradient passes through it — so the two grounds
+    // are the same blue and only the lighting differs. It is darker than that
+    // ground's lightest stop, so every contrast ratio here is better than the
+    // one the type was tuned against, not worse.
+    ultramarineFlat: {
+      label: 'Ultramarine Flat',
+      ink:   'rgba(236,199,120,0.58)',
+      faint: 'rgba(150,182,255,0.20)',
+      sw:    ['#0c168f', 'rgba(236,199,120,0.85)'],
+      vars: {
+        '--bg': '#0c168f',
+        // Not the ground. `--surface` is the dock and its chevron, which have
+        // to lift off the field — on the lit ground they do that by sitting
+        // lighter than the pooled corner they hang in, and a flat ground would
+        // otherwise leave them with nothing but their hairline border. Same
+        // value the lit theme uses, so the dock is identical across the pair.
+        '--surface': '#101fa4',
+        '--text': '#eccb84',
+        '--text-dim': '#cbb684',
+        '--tg-head': '#5d72c4',
+        '--tg-idle': '#8296dd',
+        '--tg-hover': '#cbb684',
+        '--tg-active': '#f0d79a',
+        '--panel-bg': '#f3efe1',
+        '--panel-text': '#0c168f',
+        '--panel-rule': '#b9a06a',
+        '--close': '#cbb684',
+        '--close-hover': '#f3efe1',
+      },
+      inks: LAPIS_INKS,
     },
     ecru: {
       label: 'Ecru',
@@ -557,7 +810,14 @@
   let INK   = THEMES.paper.ink;    // foreground ornament (sits behind the text)
   let FAINT = THEMES.paper.faint;  // construction frame & guides
 
-  let currentVariant = 1;          // persists across open/close
+  // Selected sub-variants per theme, for the themes that offer them: one for
+  // the ornament, one for the type, chosen independently from the same table.
+  // Keyed by theme so leaving Ultramarine and coming back returns to the pair
+  // you left it on, rather than snapping to the default.
+  const themeInk  = { ultramarine: 'gold', ultramarineFlat: 'gold' };
+  const themeText = { ultramarine: 'gold', ultramarineFlat: 'gold' };
+
+  let currentVariant = 2;          // Starburst; persists across open/close
   let dcx = 0, dcy = 0, dr = 0;    // design centre + radius, for live toggling
 
   // ── primitives ─────────────────────────────────────────────────────────────
@@ -789,18 +1049,63 @@
       ['Root-5',   ''],
     ].map(([n, s], i) => button(n, s, 'variant', i + 1, setVariant)));
 
-    group('Palette', Object.entries(THEMES).map(([key, t]) => {
-      const b = button(t.label, '', 'theme', key, setTheme);
+    // A swatch of the row's own ground + ornament ink, so a scheme is legible
+    // before you commit to it.
+    const swatch = (bg, ink) => {
       const sw = document.createElement('span');
       sw.className = 'sw';
-      sw.style.setProperty('--sw-bg',  t.sw[0]);
-      sw.style.setProperty('--sw-ink', t.sw[1]);
-      b.prepend(sw);
-      return b;
+      sw.style.setProperty('--sw-bg',  bg);
+      sw.style.setProperty('--sw-ink', ink);
+      return sw;
+    };
+
+    group('Palette', Object.entries(THEMES).flatMap(([key, t]) => {
+      const b = button(t.label, '', 'theme', key, setTheme);
+      const sel = t.inks?.[themeInk[key]];
+      b.prepend(swatch(t.sw[0], sel ? sel.swInk : t.sw[1]));
+      if (!t.inks) return [b];
+
+      // A theme's ink choices hang off its own row rather than forming a fifth
+      // group: they are a property of that palette, not of the page, and they
+      // only exist while it is the live one.
+      const sub = document.createElement('div');
+      sub.className = 'tg-sub';
+      sub.dataset.for = key;
+
+      // Two axes over the same five entries, each reading the half it owns.
+      // Each row's swatch is the colour that row actually produces: the ink it
+      // draws the ornament in, or the colour the type takes at rest.
+      [
+        ['Ornament', 'ink',  setInk,  iv => iv.swInk],
+        ['Text',     'text', setText, iv => iv.vars['--text'] ?? t.vars['--text']],
+      ].forEach(([title, attr, handler, tone]) => {
+        const axis = document.createElement('div');
+        axis.className = 'tg-axis';
+        axis.setAttribute('role', 'group');
+        axis.setAttribute('aria-label', `${t.label} — ${title.toLowerCase()}`);
+        const h = document.createElement('div');
+        h.className = 'tg-head tg-subhead';
+        h.textContent = title;
+        axis.appendChild(h);
+        for (const [ik, iv] of Object.entries(t.inks)) {
+          const ib = button(iv.label, '', attr, ik, handler);
+          ib.prepend(swatch(t.sw[0], tone(iv)));
+          axis.appendChild(ib);
+        }
+        sub.appendChild(axis);
+      });
+      return [b, sub];
     }));
 
     group('Opening', Object.entries(OPENINGS).map(([key, o]) =>
       button(o.label, o.sub, 'opening', key, setOpening)));
+
+    // Its own group, not a fifth Pattern: this is the open section's ground, and
+    // it is always the root-5 frame whatever centerpiece the backdrop is showing.
+    group('Panel ground', [
+      button('Root-5', 'pulsing trace', 'pulse', 'on',  setPulse),
+      button('None',   'plain field',   'pulse', 'off', setPulse),
+    ]);
 
     const chev = document.createElement('button');
     chev.id = 'geom-chevron';
@@ -836,12 +1141,14 @@
   });
 
   // Distance from centre to the element's farthest extent — its "reach".
-  function radiusKey(el) {
+  // Centre defaults to the backdrop ornament's; the panel ground passes its own,
+  // since it is drawn in the panel's coordinates rather than the page's.
+  function radiusKey(el, cx = dcx, cy = dcy) {
     let b;
     try { b = el.getBBox(); } catch (e) { return 0; }
     const corners = [[b.x, b.y], [b.x + b.width, b.y],
                      [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]];
-    return Math.max(...corners.map(([x, y]) => Math.hypot(x - dcx, y - dcy)));
+    return Math.max(...corners.map(([x, y]) => Math.hypot(x - cx, y - cy)));
   }
 
   // Trace an element's stroke on, after `delay`, over `dur` ms, looping forever.
@@ -886,18 +1193,22 @@
     ], opts);
   }
 
+  // The one trace timeline every figure on the page runs on. `hold` is the pause
+  // at full render before the loop restarts. Module-level rather than local to
+  // applyAnim so the panel ground can breathe on exactly this period.
+  const TRACE = { stagger: 2250, dur: 1050, hold: 900 };
+  const TRACE_TOTAL = TRACE.stagger + TRACE.dur + TRACE.hold;
+
   // Stagger the draw-on of every element by its radial reach, outermost first,
   // so the figure assembles inward toward the centre.
-  function applyAnim(g) {
+  function applyAnim(g, cx = dcx, cy = dcy) {
     if (REDUCED_MOTION.matches) return;   // static, fully-drawn figure
-    const keyed = Array.from(g.children).map(el => ({ el, k: radiusKey(el) }));
+    const keyed = Array.from(g.children).map(el => ({ el, k: radiusKey(el, cx, cy) }));
     const ks = keyed.map(o => o.k);
     const min = Math.min(...ks), span = (Math.max(...ks) - min) || 1;
-    const stagger = 2250, dur = 1050, hold = 900; // hold = pause at full render before the loop restarts
-    const total = stagger + dur + hold;
     keyed.forEach(({ el, k }) => {
       const t = (k - min) / span;                 // 0 = innermost … 1 = outermost
-      drawOn(el, (1 - t) * stagger, dur, total);
+      drawOn(el, (1 - t) * TRACE.stagger, TRACE.dur, TRACE_TOTAL);
     });
   }
 
@@ -924,13 +1235,61 @@
     const t = THEMES[key];
     if (!t) return;
     currentTheme = key;
-    for (const [prop, val] of Object.entries(t.vars))
-      document.documentElement.style.setProperty(prop, val);
-    INK   = t.ink;
-    FAINT = t.faint;
+    applyTheme();
     markActive('theme', key);
+    markActive('ink',  themeInk[key]);
+    markActive('text', themeText[key]);
+    syncSubs();
     repaintFrame();
     renderDesign();
+  }
+
+  // Same gesture one level down, on each half independently. The ground is
+  // already right either way, so an ornament change is a redraw and a type
+  // change is a property swap — neither needs palette-level bookkeeping.
+  function setInk(key) {
+    if (!THEMES[currentTheme]?.inks?.[key]) return;
+    themeInk[currentTheme] = key;
+    applyTheme();
+    markActive('ink', key);
+    repaintFrame();
+    renderDesign();
+  }
+
+  // The chrome recolours through the custom properties on its own transitions,
+  // so unlike setInk this needs no redraw — the ornament is untouched.
+  function setText(key) {
+    if (!THEMES[currentTheme]?.inks?.[key]) return;
+    themeText[currentTheme] = key;
+    applyTheme();
+    markActive('text', key);
+  }
+
+  // Resolve theme + both selected sub-variants into the live palette. Every
+  // theme states the full var set, so switching themes always overwrites
+  // cleanly; a sub-variant is a partial laid over the top.
+  function applyTheme() {
+    const t     = THEMES[currentTheme];
+    const vInk  = t.inks?.[themeInk[currentTheme]];    // ornament half
+    const vText = t.inks?.[themeText[currentTheme]];   // type half
+    for (const [prop, val] of Object.entries(vText ? { ...t.vars, ...vText.vars } : t.vars))
+      document.documentElement.style.setProperty(prop, val);
+    INK   = vInk ? vInk.ink   : t.ink;
+    FAINT = vInk ? vInk.faint : t.faint;
+    // The palette row's own swatch pairs the ground with the live ornament ink,
+    // so the parent row still reads correctly once its sub-lists collapse.
+    document.querySelector(`#geom-toggle [data-theme="${currentTheme}"] .sw`)
+      ?.style.setProperty('--sw-ink', vInk ? vInk.swInk : t.sw[1]);
+  }
+
+  // Only the active theme's sub-variants are reachable; the rest stay collapsed
+  // and inert, so they are out of the tab order as well as out of sight.
+  function syncSubs() {
+    document.querySelectorAll('#geom-toggle .tg-sub').forEach(s => {
+      const on = s.dataset.for === currentTheme;
+      s.classList.toggle('open', on);
+      s.inert = !on;
+    });
   }
 
   // The root-5 scaffold is drawn once, outside the live design layer, so it
@@ -1031,7 +1390,11 @@
     // so it already matches the live theme.
     markActive('variant', currentVariant);
     markActive('theme', currentTheme);
+    markActive('ink',  themeInk[currentTheme]);
+    markActive('text', themeText[currentTheme]);
+    syncSubs();
     markActive('opening', currentOpening);
+    markActive('pulse', panelPulse ? 'on' : 'off');
     renderDesign();
   }
 
@@ -1042,7 +1405,7 @@
     document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
   }
 
-  // ── Beam split (WORK / BIO / CONTACT) ───────────────────────────────────────
+  // ── Beam split (WORK / ABOUT / CONTACT) ───────────────────────────────────────
   //
   // Clicking any menu label splits the column's centre line open like
   // below.html's beam: the menu divides into left/right halves that slide to
@@ -1071,8 +1434,8 @@
         voluptatibus maiores alias consequatur aut perferendis doloribus
         asperiores repellat.</p>`,
     },
-    bio: {
-      title: 'BIO',
+    about: {
+      title: 'ABOUT',
       html: `
         <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
         eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
@@ -1100,10 +1463,16 @@
   };
 
   let beamOpen = false;
-  let bioHalves = [];
+  let aboutHalves = [];
+  // Each section has a motif that suits it: work and about dilate open like a
+  // lens, contact — the short one — sets itself in strips. These hold until
+  // the dock's Opening toggle is touched, after which the explicit pick wins
+  // for every section (you asked for that motif; you get that motif).
+  const SECTION_OPENING = { work: 'iris', about: 'iris', contact: 'shards' };
   let currentOpening = 'beam';     // persists across open/close, like the rest
+  let openingPinned = false;       // true once the toggle overrides the defaults
   let beamMotif = null;            // the motif the open panel arrived with
-  const BIO_MS = 375;
+  const ABOUT_MS = 375;
   const EASE_IO = 'cubic-bezier(0.4, 0, 0.2, 1)';
   const EASE_OUT_BACK = 'cubic-bezier(0.16, 1.1, 0.3, 1)';
 
@@ -1112,15 +1481,80 @@
   // the flashlight bulb at the bottom of the column: bulb → seam shoots up the
   // centre line → the top spreads to only a third of the final width → then
   // the base widens too and the whole column fills in.
-  const BIO_CLIPS = [
+  const ABOUT_CLIPS = [
     'polygon(50% 100%, 50% 100%, 50% 100%, 50% 100%)',
     'polygon(50% 100%, 50% 0%, 50% 0%, 50% 100%)',
     'polygon(50% 100%, 35% 0%, 65% 0%, 50% 100%)',
     'polygon(4% 100%, 4% 0%, 96% 0%, 96% 100%)',
   ];
-  function bioColumn() {
+  function aboutColumn() {
     const W = dr * 2, H = W * SQRT5;
     return { left: dcx - W / 2, top: dcy - H / 2, W, H };
+  }
+
+  // ── Panel ground ────────────────────────────────────────────────────────────
+  //
+  // The open section gets its own faint backdrop: the root-5 construction, drawn
+  // at the panel's exact proportions (the panel *is* the root-5 column, so the
+  // figure lands on it 1:1) and traced on the same looping timeline as the
+  // ornament out front, with the whole layer breathing on that same period.
+  //
+  // Deliberately independent of the Pattern toggle. Pattern chooses the
+  // centerpiece inside the backdrop's circle; this is the column's own
+  // scaffold, and it stays the scaffold whichever centerpiece is selected.
+  let panelPulse = true;    // on by default; persists across open/close
+
+  function buildPanelPulse(panel, c) {
+    document.getElementById('about-pulse')?.remove();
+    if (!panelPulse) return;
+
+    const host = document.createElement('div');
+    host.id = 'about-pulse';
+    host.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width',   f2(c.W));
+    svg.setAttribute('height',  f2(c.H));
+    svg.setAttribute('viewBox', `0 0 ${f2(c.W)} ${f2(c.H)}`);
+    const g = makeEl('g', {});
+    svg.appendChild(g);
+    host.appendChild(svg);
+    // In the DOM before anything is drawn into it: getBBox/getTotalLength only
+    // answer for a rendered tree, and the trace keys off both.
+    panel.prepend(host);
+
+    // A pixel shy of the half-width, so the outermost rectangle's stroke isn't
+    // sliced lengthwise by the panel's own edge.
+    const cx = c.W / 2, cy = c.H / 2;
+    drawDesign(g, cx, cy, (c.W - 2) / 2, 4);
+    // Hairline, and inked from the panel's own text colour — INK/FAINT are
+    // mixed against the *page* ground, which is a different colour (and in two
+    // palettes, a different lightness) from the panel's.
+    Array.from(g.children).forEach(el => {
+      el.setAttribute('stroke', 'currentColor');
+      el.setAttribute('stroke-width', '1');
+    });
+
+    applyAnim(g, cx, cy);
+    // The pulse proper: the ground swells as the trace completes and settles
+    // back as the loop restarts, so the two read as one breath rather than two
+    // animations sharing a box.
+    svg.style.opacity = '0.12';           // reduced-motion: a static, faint frame
+    if (!REDUCED_MOTION.matches) {
+      svg.animate([
+        { opacity: 0.05 },
+        { opacity: 0.16, offset: 0.72 },
+        { opacity: 0.05 },
+      ], { duration: TRACE_TOTAL, iterations: Infinity, easing: 'ease-in-out' });
+    }
+  }
+
+  function setPulse(val) {
+    panelPulse = val === 'on';
+    markActive('pulse', val);
+    // Applies live: the ground can be switched on or off with a section already
+    // open, without disturbing the panel or its opening motif.
+    const panel = document.getElementById('about-panel');
+    if (panel) buildPanelPulse(panel, aboutColumn());
   }
 
   function fadeBackdrop(out) {
@@ -1170,7 +1604,7 @@
     return el;
   }
   // Record the outbound keyframes on the clone, then play them.
-  function menuExit(el, kf, ms = BIO_MS, easing = EASE_IO) {
+  function menuExit(el, kf, ms = ABOUT_MS, easing = EASE_IO) {
     el._kf = kf;
     el.animate(kf, { duration: ms, easing, fill: 'forwards' });
     return el;
@@ -1197,13 +1631,13 @@
     for (let i = 0; i < n; i++) {
       const x = cut(i);
       const s = document.createElement('div');
-      s.className = 'bio-shard';
+      s.className = 'about-shard';
       s.style.left = px(x) + 'px';
       s.style.width = px(cut(i + 1) - x) + 'px';
       // Only the first copy is the real content; the rest are decoration and
       // are marked inert, or the section is announced n times and every strip
       // contributes its own tab stop for the contact link.
-      s.innerHTML = `<div class="bio-shard-content"${i ? ' inert' : ''}` +
+      s.innerHTML = `<div class="about-shard-content"${i ? ' inert' : ''}` +
                     ` style="left:${px(-x)}px;width:${px(W)}px">${inner}</div>`;
       panel.appendChild(s);
       strips.push(s);
@@ -1225,20 +1659,20 @@
            { transform: `translateX(${i ? dx : -dx}px)`, opacity: 0 }]));
       },
       open(panel) {
-        panel.style.clipPath = BIO_CLIPS[0];
+        panel.style.clipPath = ABOUT_CLIPS[0];
         panel.animate([
-          { clipPath: BIO_CLIPS[0], offset: 0,    easing: 'ease-in' },
-          { clipPath: BIO_CLIPS[1], offset: 0.2,  easing: 'ease-in-out' },
-          { clipPath: BIO_CLIPS[2], offset: 0.45, easing: 'ease-out' },
-          { clipPath: BIO_CLIPS[3], offset: 1 },
-        ], { duration: BIO_MS + 100, fill: 'forwards' });
+          { clipPath: ABOUT_CLIPS[0], offset: 0,    easing: 'ease-in' },
+          { clipPath: ABOUT_CLIPS[1], offset: 0.2,  easing: 'ease-in-out' },
+          { clipPath: ABOUT_CLIPS[2], offset: 0.45, easing: 'ease-out' },
+          { clipPath: ABOUT_CLIPS[3], offset: 1 },
+        ], { duration: ABOUT_MS + 100, fill: 'forwards' });
       },
       close(panel) {
         return panel.animate([
-          { clipPath: BIO_CLIPS[3], offset: 0,    easing: 'ease-in' },
-          { clipPath: BIO_CLIPS[2], offset: 0.55, easing: 'ease-in-out' },
-          { clipPath: BIO_CLIPS[1], offset: 0.8,  easing: 'ease-out' },
-          { clipPath: BIO_CLIPS[0], offset: 1 },
+          { clipPath: ABOUT_CLIPS[3], offset: 0,    easing: 'ease-in' },
+          { clipPath: ABOUT_CLIPS[2], offset: 0.55, easing: 'ease-in-out' },
+          { clipPath: ABOUT_CLIPS[1], offset: 0.8,  easing: 'ease-out' },
+          { clipPath: ABOUT_CLIPS[0], offset: 1 },
         ], { duration: 225, fill: 'forwards' });
       },
     },
@@ -1254,7 +1688,7 @@
         return [menuExit(menuClone(), [
           { transform: 'translateY(0) scale(1) rotate(0deg)', opacity: 1 },
           { transform: 'translateY(-150px) scale(0.55) rotate(-6deg)', opacity: 0 },
-        ], BIO_MS + 120, 'cubic-bezier(0.3, 0, 0.2, 1)')];
+        ], ABOUT_MS + 120, 'cubic-bezier(0.3, 0, 0.2, 1)')];
       },
       open(panel, c) {
         // Content rises into the opened box.
@@ -1265,7 +1699,7 @@
         ], { duration: 340, delay: 190, easing: EASE_OUT_BACK, fill: 'both' });
 
         const lid = document.createElement('div');
-        lid.id = 'bio-lid';
+        lid.id = 'about-lid';
         Object.assign(lid.style, {
           left: c.left + 'px', top: c.top + 'px',
           width: c.W + 'px', height: c.H + 'px',
@@ -1275,7 +1709,7 @@
           { transform: 'perspective(1400px) rotateX(0deg)', opacity: 1, offset: 0, easing: 'cubic-bezier(0.5, 0, 0.75, 0)' },
           { transform: 'perspective(1400px) rotateX(-14deg)', opacity: 1, offset: 0.22 },
           { transform: 'perspective(1400px) rotateX(-104deg)', opacity: 0, offset: 1 },
-        ], { duration: BIO_MS + 165, easing: EASE_IO, fill: 'forwards' });
+        ], { duration: ABOUT_MS + 165, easing: EASE_IO, fill: 'forwards' });
         off.onfinish = () => lid.remove();
 
         // Motes: released along the lid's hinge line, scattering up and out.
@@ -1326,7 +1760,7 @@
         panel.animate([
           { clipPath: `circle(0px at ${px}px ${py}px)` },
           { clipPath: `circle(${R}px at ${px}px ${py}px)` },
-        ], { duration: BIO_MS + 165, easing: 'cubic-bezier(0.22, 0.9, 0.25, 1)', fill: 'forwards' });
+        ], { duration: ABOUT_MS + 165, easing: 'cubic-bezier(0.22, 0.9, 0.25, 1)', fill: 'forwards' });
         // Inner content counter-rotates in, the way a lens settles.
         panel.firstElementChild?.animate([
           { opacity: 0, transform: 'scale(1.06) rotate(2.5deg)' },
@@ -1380,21 +1814,35 @@
       open(panel, c) {
         panel.style.clipPath = 'inset(0 0 0 0)';
         const step = 385 / this.n;
-        shardStrips(panel, this.n).forEach((s, i) => {
+        const strips = shardStrips(panel, this.n);
+        let last = null;
+        strips.forEach((s, i) => {
           const up = i % 2 === 0;
-          s.animate([
+          last = s.animate([
             { transform: `translateY(${up ? -c.H : c.H}px)`, opacity: 0 },
             { transform: 'translateY(0)', opacity: 1 },
           ], {
             duration: 430,
-            delay: Math.round(i * step),
+            delay: Math.round(i * step),   // strictly increasing: the last is last
             easing: EASE_OUT_BACK,
             fill: 'both',
           });
         });
+        // Once the slats have landed they are only a divided copy of the panel,
+        // so hand the field back to the panel itself. The panel ground sits
+        // behind every strip, and opaque strips would hide it forever.
+        if (last) last.onfinish = () => {
+          panel.style.background = '';
+          strips.forEach(s => { s.style.background = 'transparent'; });
+        };
       },
       close(panel, c) {
-        const strips = Array.from(panel.children);
+        // .about-shard, not children: the panel ground is a child too.
+        const strips = Array.from(panel.querySelectorAll('.about-shard'));
+        // Undo the hand-off, so the column reads as breaking apart again rather
+        // than as slats sliding off an intact page.
+        panel.style.background = 'transparent';
+        strips.forEach(s => { s.style.background = ''; });
         const mid = (strips.length - 1) / 2;
         const step = 105 / Math.max(mid, 1);
         let last = null, lastDelay = -1;
@@ -1421,11 +1869,12 @@
   function setOpening(key) {
     if (!OPENINGS[key]) return;
     currentOpening = key;
+    openingPinned = true;
     markActive('opening', key);
   }
 
-  function layoutBioClose(close) {
-    const { left, top, W } = bioColumn();
+  function layoutAboutClose(close) {
+    const { left, top, W } = aboutColumn();
     close.style.left = Math.min(left + W + 16, window.innerWidth - 54) + 'px';
     close.style.top = Math.max(14, top) + 'px';
   }
@@ -1436,22 +1885,25 @@
 
     // Latched for the lifetime of this panel: switching the toggle while a
     // section is open must not close it with a motif it never opened with.
-    const motif = beamMotif = OPENINGS[currentOpening] || OPENINGS.beam;
+    const key = openingPinned ? currentOpening : SECTION_OPENING[section];
+    const motif = beamMotif = OPENINGS[key] || OPENINGS.beam;
+    // Keep the dock honest about what just played, without pinning it.
+    if (!openingPinned) markActive('opening', key);
     fadeBackdrop(true);
     btn.style.visibility = 'hidden';
-    bioHalves = motif.menuOut();
+    aboutHalves = motif.menuOut();
 
-    const col = bioColumn();
+    const col = aboutColumn();
     const { left, top, W, H } = col;
     const panel = document.createElement('div');
-    panel.id = 'bio-panel';
+    panel.id = 'about-panel';
     Object.assign(panel.style, {
       left: left + 'px', top: top + 'px',
       width: W + 'px', height: H + 'px',
     });
     const content = BEAM_CONTENT[section];
     panel.innerHTML = `
-      <div class="bio-inner">
+      <div class="about-inner">
         <h2>${content.title}</h2>
         ${content.html}
       </div>`;
@@ -1460,11 +1912,15 @@
     // Under reduced-motion the section simply is there, as the ornament simply
     // is drawn.
     if (!REDUCED_MOTION.matches) motif.open(panel, col);
+    // After the motif, never before: shards rebuilds the panel's children out of
+    // its innerHTML, and iris animates whatever the panel's first element child
+    // is at that moment. The ground has no business being either.
+    buildPanelPulse(panel, col);
 
     const close = document.createElement('button');
-    close.id = 'bio-close';
+    close.id = 'about-close';
     close.setAttribute('aria-label', `Close ${section}`);
-    layoutBioClose(close);
+    layoutAboutClose(close);
     close.innerHTML = `
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke-width="1.4">
         <circle cx="20" cy="20" r="15"/>
@@ -1473,34 +1929,44 @@
       </svg>`;
     close.addEventListener('click', (e) => { e.stopPropagation(); closeBeam(); });
     document.body.appendChild(close);
-    setTimeout(() => close.classList.add('visible'), BIO_MS * 0.7);
+    setTimeout(() => close.classList.add('visible'), ABOUT_MS * 0.7);
   }
 
   function closeBeam() {
     if (!beamOpen) return;
     beamOpen = false;
 
-    document.getElementById('bio-close')?.remove();
-    document.getElementById('bio-lid')?.remove();
+    document.getElementById('about-close')?.remove();
+    document.getElementById('about-lid')?.remove();
+
+    // The ground goes out ahead of the panel — quickly, since the panel is only
+    // on screen for another ~250ms, and before shards hands the field back to
+    // its slats (which would otherwise expose the tracing on a transparent box).
+    const pulse = document.getElementById('about-pulse');
+    if (pulse) {
+      const fade = pulse.animate([{ opacity: 1 }, { opacity: 0 }],
+        { duration: 120, easing: 'ease', fill: 'forwards' });
+      fade.onfinish = () => pulse.remove();
+    }
 
     const motif = beamMotif || OPENINGS.beam;
     beamMotif = null;
 
-    const panel = document.getElementById('bio-panel');
+    const panel = document.getElementById('about-panel');
     if (panel) {
-      const anim = REDUCED_MOTION.matches ? null : motif.close(panel, bioColumn());
+      const anim = REDUCED_MOTION.matches ? null : motif.close(panel, aboutColumn());
       if (anim) anim.onfinish = () => panel.remove();
       else panel.remove();
     }
 
     // Every motif's menu exit is stored on the clone as `_kf`; playing it
     // backwards reassembles the menu however it came apart.
-    bioHalves.forEach(half => {
+    aboutHalves.forEach(half => {
       const anim = half.animate([...(half._kf || [])].reverse(),
         { duration: 225, easing: EASE_IO, fill: 'forwards' });
       anim.onfinish = () => { half.remove(); btn.style.visibility = ''; };
     });
-    bioHalves = [];
+    aboutHalves = [];
 
     fadeBackdrop(false);
   }
@@ -1523,14 +1989,19 @@
         const el = document.getElementById(id);
         if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
       });
-      const { left, top, W, H } = bioColumn();
-      const panel = document.getElementById('bio-panel');
-      if (panel) Object.assign(panel.style, {
-        left: left + 'px', top: top + 'px',
-        width: W + 'px', height: H + 'px',
-      });
-      const close = document.getElementById('bio-close');
-      if (close) layoutBioClose(close);
+      const { left, top, W, H } = aboutColumn();
+      const panel = document.getElementById('about-panel');
+      if (panel) {
+        Object.assign(panel.style, {
+          left: left + 'px', top: top + 'px',
+          width: W + 'px', height: H + 'px',
+        });
+        // The ground is drawn at fixed pixel sizes, so a new column needs a new
+        // one — same rebuild the backdrop just took.
+        buildPanelPulse(panel, { left, top, W, H });
+      }
+      const close = document.getElementById('about-close');
+      if (close) layoutAboutClose(close);
     }, 150);
   });
 
@@ -1549,7 +2020,7 @@
   });
   */
 
-  const beamSections = ['work', 'bio', 'contact'];
+  const beamSections = ['work', 'about', 'contact'];
   btn.querySelectorAll('.menu-labels p').forEach((label, i) => {
     label.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1561,7 +2032,7 @@
 <div class="content-panel" id="panel-work">
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam quis nostrud exercitation.</p>
 </div>
-<div class="content-panel" id="panel-bio">
+<div class="content-panel" id="panel-about">
   <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt nulla pariatur.</p>
 </div>
 <div class="content-panel" id="panel-contact">
