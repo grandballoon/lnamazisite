@@ -9,23 +9,30 @@
 
     /* Palette — every colour in the page reads from these. The JS THEMES table
        overwrites them on :root when a scheme is picked, and re-renders the
-       ornament with the matching stroke colours. Defaults = "Paper". */
+       ornament with the matching stroke colours.
+
+       Defaults = "Ultramarine Flat", the palette the page opens on. Stated here
+       as well as in THEMES so the first paint is already the lapis ground: the
+       JS only lands its values at DOMContentLoaded, and a white :root would
+       flash paper-white for that frame and then cross-fade on body's 0.45s
+       background transition. Keep the two in step — this block is a mirror of
+       THEMES.ultramarineFlat.vars, not an independent scheme. */
     :root {
-      --bg:          #fff;
+      --bg:          #0c168f;
       /* Flat stand-in for --bg, for small surfaces (the control dock) where a
          gradient ground would render as a bright blob rather than a field. */
-      --surface:     #fff;
-      --text:        #111;
-      --text-dim:    #606060;
-      --tg-head:     #cfcfcf;
-      --tg-idle:     #b0b0b0;
-      --tg-hover:    #707070;
-      --tg-active:   #111;
-      --panel-bg:    #f7f7f7;
-      --panel-text:  #111;
-      --panel-rule:  #999;
-      --close:       #555;
-      --close-hover: #111;
+      --surface:     #101fa4;
+      --text:        #eccb84;
+      --text-dim:    #cbb684;
+      --tg-head:     #5d72c4;
+      --tg-idle:     #8296dd;
+      --tg-hover:    #cbb684;
+      --tg-active:   #f0d79a;
+      --panel-bg:    #f3efe1;
+      --panel-text:  #0c168f;
+      --panel-rule:  #b9a06a;
+      --close:       #cbb684;
+      --close-hover: #f3efe1;
     }
 
     body {
@@ -806,9 +813,12 @@
     },
   };
 
-  let currentTheme = 'paper';      // persists across open/close, like the pattern
-  let INK   = THEMES.paper.ink;    // foreground ornament (sits behind the text)
-  let FAINT = THEMES.paper.faint;  // construction frame & guides
+  // The page opens on the flat lapis ground; :root states the same values so
+  // the first paint is already this palette. Persists across open/close, like
+  // the pattern.
+  let currentTheme = 'ultramarineFlat';
+  let INK   = THEMES[currentTheme].ink;    // ornament (sits behind the text)
+  let FAINT = THEMES[currentTheme].faint;  // construction frame & guides
 
   // Selected sub-variants per theme, for the themes that offer them: one for
   // the ornament, one for the type, chosen independently from the same table.
@@ -1302,6 +1312,10 @@
   // ── spawn / remove ───────────────────────────────────────────────────────────
   function spawnGeometry() {
     removeGeometry();
+    // Land the live palette on :root before anything is drawn. On first load
+    // that is the opening theme (the CSS defaults already match it, so nothing
+    // moves); on a resize rebuild it is whatever the dock was left on.
+    applyTheme();
     const r  = btn.getBoundingClientRect();
     const cx = r.left + r.width  / 2;
     const cy = r.top  + r.height / 2;
