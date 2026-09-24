@@ -1,0 +1,19 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "lnamazi-content",
+	"main": "src/index.js",
+	"compatibility_date": "2025-09-01",
+	"observability": {
+		"enabled": true
+	},
+	"kv_namespaces": [
+		// Fill in from `npx wrangler kv namespace create CONTENT` (see README.md).
+		{
+			"binding": "CONTENT",
+			"id": "34357d51ce5d4f8899a0e8969a1b90e0",
+			"remote": true
+		}
+	]
+	// The EDIT_KEY secret is set with `npx wrangler secret put EDIT_KEY`,
+	// never written here.
+}

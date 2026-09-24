@@ -390,6 +390,66 @@
     }
     #about-panel .contact-email a:hover { border-bottom-color: var(--panel-text); }
 
+    /* Editing a section in place. The copy keeps every rule above — it is the
+       same <p>s being typed into — so the only change is a dashed rule round
+       the editable body to say "this is live", drawn in the panel's own ink. */
+    #about-panel .beam-body[contenteditable] {
+      outline: 1px dashed var(--panel-rule);
+      outline-offset: 0.9rem;
+      caret-color: var(--panel-text);
+    }
+    #about-panel .beam-body[contenteditable]:focus { outline-style: solid; }
+
+    /* WORK drop zone — a dashed well under the copy that takes dragged-in
+       images and video. Items share a wrapping row: two across when the column
+       allows, one when it doesn't; each piece is contained, never cropped. */
+    .work-drop {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-top: 1.8rem;
+      padding: 1rem;
+      border: 1px dashed var(--panel-rule);
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+    }
+    #about-panel.drag-over .work-drop {
+      border-style: solid;
+      border-color: var(--panel-text);
+      background-color: color-mix(in srgb, var(--panel-rule) 14%, transparent);
+    }
+    #about-panel .work-drop-hint {
+      font-size: 0.66rem;
+      line-height: 1.4;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-align: center;
+      color: var(--panel-rule);
+    }
+    .work-media {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .work-media:empty { display: none; }
+    .work-item {
+      flex: 1 1 11rem;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--panel-text) 6%, transparent);
+    }
+    .work-item img,
+    .work-item video {
+      display: block;
+      max-width: 100%;
+      max-height: 22rem;
+      object-fit: contain;
+    }
+    /* A video has no intrinsic size until its metadata lands; fill the cell so
+       it doesn't flash at the 300x150 default first. */
+    .work-item video { width: 100%; height: auto; }
+
     /* Panel ground — the root-5 construction traced faintly behind the open
        section's text, looping on the same rhythm as the ornament out front.
        Sticky + zero-height so the figure holds still while the panel scrolls
@@ -482,7 +542,8 @@
       pointer-events: none;
     }
 
-    #about-close {
+    #about-close,
+    #about-edit {
       position: fixed;
       z-index: 62;
       width: 40px;
@@ -494,15 +555,19 @@
       opacity: 0;
       transition: opacity 0.1s ease;
     }
-    #about-close.visible { opacity: 1; }
-    #about-close svg { display: block; }
-    #about-close circle,
-    #about-close line {
+    #about-close.visible,
+    #about-edit.visible { opacity: 1; }
+    #about-close svg,
+    #about-edit svg { display: block; }
+    #about-close svg,
+    #about-edit svg {
       stroke: var(--close);
       transition: stroke 0.2s ease;
     }
-    #about-close:hover circle,
-    #about-close:hover line { stroke: var(--close-hover); }
+    #about-close:hover svg,
+    #about-edit:hover svg { stroke: var(--close-hover); }
+    /* Saving: the ✓ dims and ignores clicks until the server answers. */
+    #about-edit[aria-busy="true"] { opacity: 0.4; cursor: progress; }
   </style>
 </head>
 <body>
@@ -1446,7 +1511,11 @@
         <p>Et harum quidem rerum facilis est et expedita distinctio. Vel illum
         qui dolorem eum fugiat quo voluptas nulla pariatur, ut aut reiciendis
         voluptatibus maiores alias consequatur aut perferendis doloribus
-        asperiores repellat.</p>`,
+        asperiores repellat.</p>
+        <div class="work-drop">
+          <p class="work-drop-hint">Drop images or video here</p>
+          <div class="work-media"></div>
+        </div>`,
     },
     about: {
       title: 'ABOUT',
@@ -1659,6 +1728,17 @@
     return strips;
   }
 
+  // The inverse of shardStrips, for a panel that has to be one live page again
+  // (editing): the first strip's copy is the real content, so it becomes the
+  // panel's content and the decorative strips go. The ground is untouched.
+  function unshard(panel) {
+    const first = panel.querySelector('.about-shard-content');
+    if (!first) return;
+    panel.querySelectorAll('.about-shard').forEach(s => s.remove());
+    panel.append(...first.childNodes);
+    panel.style.background = '';
+  }
+
   const OPENINGS = {
     // I. BEAM — the searchlight. A seam shoots up the centre line, the top
     // spreads, then the base follows and the column fills.
@@ -1852,7 +1932,16 @@
       },
       close(panel, c) {
         // .about-shard, not children: the panel ground is a child too.
-        const strips = Array.from(panel.querySelectorAll('.about-shard'));
+        let strips = Array.from(panel.querySelectorAll('.about-shard'));
+        // Editing merges the strips back into one page (see unshard); cut it
+        // again so it still leaves in slats. The ground stays out of the cut,
+        // or every strip would carry its own copy of it.
+        if (!strips.length) {
+          const pulse = document.getElementById('about-pulse');
+          pulse?.remove();
+          strips = shardStrips(panel, this.n);
+          if (pulse) panel.prepend(pulse);
+        }
         // Undo the hand-off, so the column reads as breaking apart again rather
         // than as slats sliding off an intact page.
         panel.style.background = 'transparent';
@@ -1887,10 +1976,347 @@
     markActive('opening', key);
   }
 
-  function layoutAboutClose(close) {
+  // ── Work media drop ─────────────────────────────────────────────────────────
+  //
+  // Images and video dragged onto the open WORK panel are shown in its
+  // .work-media list. Kept as object URLs for the life of the page, so the
+  // section reopens with whatever was dropped into it; nothing is uploaded.
+  //
+  // Listeners live on the panel, never on its children: the shards motif
+  // rebuilds the children from innerHTML. For the same reason rendering goes
+  // to every .work-media in the panel — under shards each strip holds its own
+  // copy, and each copy has to show the same media for the strips to line up.
+  const workMedia = [];   // { url, kind: 'image' | 'video', name }
+
+  function workMediaEl(m) {
+    const item = document.createElement('div');
+    item.className = 'work-item';
+    const el = document.createElement(m.kind === 'video' ? 'video' : 'img');
+    el.src = m.url;
+    if (m.kind === 'video') {
+      el.controls = true;
+      el.preload = 'metadata';
+      el.playsInline = true;
+    } else {
+      el.alt = m.name;
+    }
+    item.appendChild(el);
+    return item;
+  }
+
+  function renderWorkMedia(panel) {
+    panel.querySelectorAll('.work-media').forEach(list => {
+      list.replaceChildren(...workMedia.map(workMediaEl));
+    });
+  }
+
+  const draggingFiles = e => !!e.dataTransfer?.types.includes('Files');
+
+  function wireWorkDrop(panel) {
+    // dragenter/dragleave fire for every child crossed, so count depth rather
+    // than toggling on each event, or the highlight flickers.
+    let depth = 0;
+    const setOver = on => panel.classList.toggle('drag-over', on);
+    panel.addEventListener('dragenter', (e) => {
+      if (!draggingFiles(e)) return;
+      e.preventDefault();
+      if (depth++ === 0) setOver(true);
+    });
+    panel.addEventListener('dragover', (e) => {
+      if (!draggingFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    panel.addEventListener('dragleave', (e) => {
+      if (!draggingFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setOver(false);
+    });
+    panel.addEventListener('drop', (e) => {
+      if (!draggingFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setOver(false);
+      for (const file of e.dataTransfer.files) {
+        const kind = file.type.split('/')[0];
+        if (kind !== 'image' && kind !== 'video') continue;
+        workMedia.push({ url: URL.createObjectURL(file), kind, name: file.name });
+      }
+      renderWorkMedia(panel);
+    });
+  }
+
+  // A file dropped anywhere outside the panel would otherwise navigate the tab
+  // away to that file. The panel's own handlers run first and claim the event
+  // (defaultPrevented); anything unclaimed is refused here.
+  ['dragover', 'drop'].forEach(type => window.addEventListener(type, (e) => {
+    if (!draggingFiles(e) || e.defaultPrevented) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'none';
+  }));
+
+  // ── Section editing (ABOUT / CONTACT) ───────────────────────────────────────
+  //
+  // The open section's body can be edited in place: the ✎ under the ⊗ makes it
+  // contenteditable, and the same button (now ✓) saves. Escape cancels;
+  // ⌘/Ctrl+Enter saves. The ⊗ is hidden while editing, so a section can only be
+  // left saved or cancelled — never with an edit silently in flight.
+  //
+  // Styling survives because nothing is restyled: the saved body is rebuilt as
+  // the same bare <p>s (plus the contact line's .contact-email and its mailto
+  // link) that the panel CSS already targets. Anything the browser or a paste
+  // brought in — spans, inline styles, fonts — is reduced to its text.
+  //
+  // Saved copy lives on the content Worker (api/ in this repo): fetched once on
+  // load, written on save. BEAM_CONTENT stays the fallback for a section that
+  // was never saved, or when the Worker can't be reached; saving an empty body
+  // clears the override and brings that original copy back.
+  //
+  // Only editors see the ✎: opening the page with ?edit turns editor mode on,
+  // and the edit key (asked for on the first save, and the Worker's EDIT_KEY)
+  // keeps it on in that browser. ?edit=off forgets the key.
+  const CONTENT_API = '';   // the deployed Worker's URL, no trailing slash
+  const EDITABLE = new Set(['about', 'contact']);
+  const savedHtml = {};     // section → the Worker's copy, once loaded
+  let editState = null;     // { section, body, before, saving } while editing
+
+  const EDIT_KEY_STORE = 'lnamazi.editKey';
+  const editParam = new URLSearchParams(location.search).get('edit');  // null when absent
+  let editKey = null;       // in memory too, in case storage is blocked
+  try {
+    if (editParam === 'off') localStorage.removeItem(EDIT_KEY_STORE);
+    else editKey = localStorage.getItem(EDIT_KEY_STORE);
+  } catch {}
+  const editorMode = !!CONTENT_API &&
+    (editKey !== null || (editParam !== null && editParam !== 'off'));
+
+  function rememberEditKey(key) {
+    editKey = key;
+    try {
+      if (key === null) localStorage.removeItem(EDIT_KEY_STORE);
+      else localStorage.setItem(EDIT_KEY_STORE, key);
+    } catch {}
+  }
+
+  function sectionHtml(section) {
+    return savedHtml[section] ?? BEAM_CONTENT[section].html;
+  }
+
+  // Load the saved copy. Whatever comes back is cleaned exactly as a save is —
+  // parsed in an inert document, so nothing in it runs or loads — and a section
+  // already open when it lands is refreshed in place (every copy of its body,
+  // so shards' slats stay in step).
+  async function loadSections() {
+    if (!CONTENT_API) return;
+    let data;
+    try {
+      const res = await fetch(`${CONTENT_API}/sections`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch (err) {
+      console.warn('Section content unavailable; showing the built-in copy.', err);
+      return;
+    }
+    const panel = document.getElementById('about-panel');
+    EDITABLE.forEach(section => {
+      if (typeof data?.[section] !== 'string') return;
+      const doc = new DOMParser().parseFromString(data[section], 'text/html');
+      const html = cleanBody(doc.body);
+      if (!html) return;
+      savedHtml[section] = html;
+      if (panel?.dataset.section === section && editState?.section !== section) {
+        panel.querySelectorAll('.beam-body').forEach(b => { b.innerHTML = html; });
+      }
+    });
+  }
+
+  async function putSection(section, html) {
+    const res = await fetch(`${CONTENT_API}/sections/${section}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${editKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    return res.status;
+  }
+
+  // Copy `node`'s text into `dst`, keeping only line breaks and links.
+  function cleanInline(node, dst) {
+    if (node.nodeType === Node.TEXT_NODE) { dst.append(node.textContent); return; }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeName === 'BR') { dst.append(document.createElement('br')); return; }
+    if (node.nodeName === 'A') {
+      const a = document.createElement('a');
+      node.childNodes.forEach(child => cleanInline(child, a));
+      const text = a.textContent.trim();
+      const href = node.getAttribute('href') || '';
+      // A mailto link follows its own text, so editing the address shown
+      // edits the address used.
+      if (text && href.startsWith('mailto:')) a.href = 'mailto:' + text;
+      else if (text && /^https?:/i.test(href)) a.href = href;
+      else { dst.append(...a.childNodes); return; }
+      dst.append(a);
+      return;
+    }
+    node.childNodes.forEach(child => cleanInline(child, dst));
+  }
+
+  // The edited body as plain paragraphs. Block-level children (the <p>s, or a
+  // <div> some browsers make on Enter) each become a <p>; loose top-level text
+  // is gathered into one. Empty paragraphs and trailing breaks are dropped.
+  function cleanBody(body) {
+    const out = document.createElement('div');
+    let loose = null;
+    body.childNodes.forEach(node => {
+      if (node.nodeName === 'P' || node.nodeName === 'DIV') {
+        loose = null;
+        const p = document.createElement('p');
+        if (node.classList.contains('contact-email')) p.className = 'contact-email';
+        node.childNodes.forEach(child => cleanInline(child, p));
+        out.append(p);
+      } else {
+        if (!loose) out.append(loose = document.createElement('p'));
+        cleanInline(node, loose);
+      }
+    });
+    out.querySelectorAll('p').forEach(p => {
+      while (p.lastChild?.nodeName === 'BR') p.lastChild.remove();
+      if (!p.textContent.trim()) p.remove();
+    });
+    return out.innerHTML.trim();
+  }
+
+  const EDIT_ICON = `
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke-width="1.4"
+           stroke-linejoin="round" stroke-linecap="round">
+        <circle cx="20" cy="20" r="15"/>
+        <path d="M14.5 25.5l1-4 8-8 3 3-8 8z"/>
+        <line x1="21.5" y1="15.5" x2="24.5" y2="18.5"/>
+      </svg>`;
+  const SAVE_ICON = `
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke-width="1.4"
+           stroke-linejoin="round" stroke-linecap="round">
+        <circle cx="20" cy="20" r="15"/>
+        <polyline points="14 20.5 18 24.5 26 15.5"/>
+      </svg>`;
+
+  function setEditButton(section, editing) {
+    const edit = document.getElementById('about-edit');
+    if (!edit) return;
+    edit.innerHTML = editing ? SAVE_ICON : EDIT_ICON;
+    edit.setAttribute('aria-label', `${editing ? 'Save' : 'Edit'} ${section}`);
+  }
+
+  function setEditing(section, body, on) {
+    if (on) body.contentEditable = 'true';
+    else body.removeAttribute('contenteditable');
+    setEditButton(section, on);
+    const close = document.getElementById('about-close');
+    if (close) close.hidden = on;
+  }
+
+  function startEdit(section) {
+    const panel = document.getElementById('about-panel');
+    if (!panel || editState) return;
+    // Under shards the live copy sits in the first slat, one slat wide.
+    unshard(panel);
+    const body = panel.querySelector('.beam-body');
+    editState = { section, body, before: body.innerHTML, saving: false };
+    setEditing(section, body, true);
+    document.execCommand('defaultParagraphSeparator', false, 'p');
+    body.focus();
+    getSelection().selectAllChildren(body);
+    getSelection().collapseToEnd();
+  }
+
+  function cancelEdit() {
+    if (!editState || editState.saving) return;
+    const { section, body, before } = editState;
+    editState = null;
+    body.innerHTML = before;
+    setEditing(section, body, false);
+  }
+
+  // Stays in editing, with the text as typed, unless the Worker confirms the
+  // save: a refused key is forgotten and asked for again on the next try.
+  async function saveEdit() {
+    if (!editState || editState.saving) return;
+    const state = editState;
+    const { section, body } = state;
+    if (editKey === null) {
+      const key = prompt('Edit key');
+      if (!key) return;
+      rememberEditKey(key.trim());
+    }
+    const html = cleanBody(body);
+    const edit = document.getElementById('about-edit');
+    state.saving = true;
+    body.contentEditable = 'false';
+    edit?.setAttribute('aria-busy', 'true');
+    let status;
+    try {
+      status = await putSection(section, html);
+    } catch {
+      status = 0;
+    }
+    state.saving = false;
+    edit?.removeAttribute('aria-busy');
+    if (status === 204) {
+      if (html) savedHtml[section] = html;
+      else delete savedHtml[section];
+      editState = null;
+      body.innerHTML = sectionHtml(section);
+      setEditing(section, body, false);
+      return;
+    }
+    body.contentEditable = 'true';
+    if (status === 401) {
+      rememberEditKey(null);
+      alert('That edit key was refused. Save again to enter it.');
+    } else {
+      alert(`Couldn't save (${status ? 'HTTP ' + status : 'network error'}). ` +
+            'Your text is still here; try saving again.');
+    }
+    body.focus();
+  }
+
+  function wireEditing(panel, section) {
+    const body = panel.querySelector('.beam-body');
+    // Pasted rich text would bring its own fonts and colours; take the words.
+    body.addEventListener('paste', (e) => {
+      if (!editState) return;
+      e.preventDefault();
+      document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+    });
+    body.addEventListener('keydown', (e) => {
+      if (!editState) return;
+      if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+      else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        saveEdit();
+      }
+    });
+
+    const edit = document.createElement('button');
+    edit.id = 'about-edit';
+    edit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (editState) saveEdit(); else startEdit(section);
+    });
+    // In the DOM first: setEditButton finds it by id.
+    document.body.appendChild(edit);
+    setEditButton(section, false);
+    return edit;
+  }
+
+  // The ⊗ sits outside the column's top-right corner; the ✎ stacks under it.
+  function layoutPanelButtons() {
     const { left, top, W } = aboutColumn();
-    close.style.left = Math.min(left + W + 16, window.innerWidth - 54) + 'px';
-    close.style.top = Math.max(14, top) + 'px';
+    const x = Math.min(left + W + 16, window.innerWidth - 54) + 'px';
+    const y = Math.max(14, top);
+    const close = document.getElementById('about-close');
+    const edit = document.getElementById('about-edit');
+    if (close) Object.assign(close.style, { left: x, top: y + 'px' });
+    if (edit) Object.assign(edit.style, { left: x, top: y + 46 + 'px' });
   }
 
   function openBeam(section) {
@@ -1911,17 +2337,23 @@
     const { left, top, W, H } = col;
     const panel = document.createElement('div');
     panel.id = 'about-panel';
+    panel.dataset.section = section;
     Object.assign(panel.style, {
       left: left + 'px', top: top + 'px',
       width: W + 'px', height: H + 'px',
     });
-    const content = BEAM_CONTENT[section];
     panel.innerHTML = `
       <div class="about-inner">
-        <h2>${content.title}</h2>
-        ${content.html}
+        <h2>${BEAM_CONTENT[section].title}</h2>
+        <div class="beam-body">${sectionHtml(section)}</div>
       </div>`;
     document.body.appendChild(panel);
+    // Before the motif: shards copies the panel's innerHTML into its strips,
+    // so the media has to be in place for every strip to carry it.
+    if (section === 'work') {
+      renderWorkMedia(panel);
+      wireWorkDrop(panel);
+    }
     // The panel is in the DOM and laid out; the motif takes it from here.
     // Under reduced-motion the section simply is there, as the ornament simply
     // is drawn.
@@ -1934,7 +2366,6 @@
     const close = document.createElement('button');
     close.id = 'about-close';
     close.setAttribute('aria-label', `Close ${section}`);
-    layoutAboutClose(close);
     close.innerHTML = `
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke-width="1.4">
         <circle cx="20" cy="20" r="15"/>
@@ -1943,14 +2374,24 @@
       </svg>`;
     close.addEventListener('click', (e) => { e.stopPropagation(); closeBeam(); });
     document.body.appendChild(close);
-    setTimeout(() => close.classList.add('visible'), ABOUT_MS * 0.7);
+    const edit = editorMode && EDITABLE.has(section) ? wireEditing(panel, section) : null;
+    layoutPanelButtons();
+    setTimeout(() => {
+      close.classList.add('visible');
+      edit?.classList.add('visible');
+    }, ABOUT_MS * 0.7);
   }
 
   function closeBeam() {
     if (!beamOpen) return;
     beamOpen = false;
 
+    // Unreachable mid-edit (the ⊗ is hidden then); kept so a future caller
+    // can't strand an editable body on a closing panel.
+    cancelEdit();
+    editState = null;
     document.getElementById('about-close')?.remove();
+    document.getElementById('about-edit')?.remove();
     document.getElementById('about-lid')?.remove();
 
     // The ground goes out ahead of the panel — quickly, since the panel is only
@@ -1990,6 +2431,7 @@
   // so the old pop-up open/close wiring (kept below, commented) would work again
   // if restored.
   window.addEventListener('DOMContentLoaded', spawnGeometry);
+  loadSections();
 
   let resizeTimer;
   window.addEventListener('resize', () => {
@@ -2014,8 +2456,7 @@
         // one — same rebuild the backdrop just took.
         buildPanelPulse(panel, { left, top, W, H });
       }
-      const close = document.getElementById('about-close');
-      if (close) layoutAboutClose(close);
+      layoutPanelButtons();
     }, 150);
   });
 
