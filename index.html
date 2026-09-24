@@ -2075,7 +2075,7 @@
   // Only editors see the ✎: opening the page with ?edit turns editor mode on,
   // and the edit key (asked for on the first save, and the Worker's EDIT_KEY)
   // keeps it on in that browser. ?edit=off forgets the key.
-  const CONTENT_API = '';   // the deployed Worker's URL, no trailing slash
+  const CONTENT_API = 'https://lnamazi-content.luke-conley.workers.dev';   // the deployed Worker's URL, no trailing slash
   const EDITABLE = new Set(['about', 'contact']);
   const savedHtml = {};     // section → the Worker's copy, once loaded
   let editState = null;     // { section, body, before, saving } while editing
