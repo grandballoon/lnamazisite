@@ -431,7 +431,10 @@
       gap: 0.75rem;
     }
     .work-media:empty { display: none; }
+    /* Without the drop well (visitors), the list sits straight under the copy. */
+    #about-panel .beam-body + .work-media { margin-top: 1.8rem; }
     .work-item {
+      position: relative;
       flex: 1 1 11rem;
       min-width: 0;
       display: flex;
@@ -449,6 +452,28 @@
     /* A video has no intrinsic size until its metadata lands; fill the cell so
        it doesn't flash at the 300x150 default first. */
     .work-item video { width: 100%; height: auto; }
+    /* Editors' remove control, pinned to the item's top-right corner in the
+       panel's own paper and ink, so it reads on any image. */
+    .work-remove {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.4rem;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid var(--panel-rule);
+      background: var(--panel-bg);
+      color: var(--panel-text);
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+    .work-remove:hover { border-color: var(--panel-text); }
+    .work-remove:disabled { opacity: 0.4; cursor: progress; }
+    .work-remove svg { display: block; }
 
     /* Panel ground — the root-5 construction traced faintly behind the open
        section's text, looping on the same rhythm as the ornament out front.
@@ -1511,11 +1536,7 @@
         <p>Et harum quidem rerum facilis est et expedita distinctio. Vel illum
         qui dolorem eum fugiat quo voluptas nulla pariatur, ut aut reiciendis
         voluptatibus maiores alias consequatur aut perferendis doloribus
-        asperiores repellat.</p>
-        <div class="work-drop">
-          <p class="work-drop-hint">Drop images or video here</p>
-          <div class="work-media"></div>
-        </div>`,
+        asperiores repellat.</p>`,
     },
     about: {
       title: 'ABOUT',
@@ -1976,23 +1997,39 @@
     markActive('opening', key);
   }
 
-  // ── Work media drop ─────────────────────────────────────────────────────────
+  // ── Work media ──────────────────────────────────────────────────────────────
   //
-  // Images and video dragged onto the open WORK panel are shown in its
-  // .work-media list. Kept as object URLs for the life of the page, so the
-  // section reopens with whatever was dropped into it; nothing is uploaded.
+  // Images and video on the WORK panel, listed in upload order under its text.
+  // The files live on the Worker (/media); the list is fetched once on load.
+  // Editors (editor mode, with the Worker reachable — see Section editing) get
+  // a drop well to add files and a ⊗ on each item to remove it; everyone else
+  // sees only the media.
   //
   // Listeners live on the panel, never on its children: the shards motif
   // rebuilds the children from innerHTML. For the same reason rendering goes
   // to every .work-media in the panel — under shards each strip holds its own
   // copy, and each copy has to show the same media for the strips to line up.
-  const workMedia = [];   // { url, kind: 'image' | 'video', name }
+  let workMedia = [];     // { id, kind: 'image' | 'video', name }, oldest first
+  let uploading = 0;      // files still on their way up
+  const MAX_MEDIA_BYTES = 95 * 1024 * 1024;   // mirrors the Worker's limit
+  const DROP_HINT = 'Drop images or video here';
 
-  function workMediaEl(m) {
+  const workEditable = () => editorMode && contentOnline;
+
+  function workMediaMarkup() {
+    return workEditable()
+      ? `<div class="work-drop">
+           <p class="work-drop-hint">${DROP_HINT}</p>
+           <div class="work-media"></div>
+         </div>`
+      : '<div class="work-media"></div>';
+  }
+
+  function workMediaEl(m, editable) {
     const item = document.createElement('div');
     item.className = 'work-item';
     const el = document.createElement(m.kind === 'video' ? 'video' : 'img');
-    el.src = m.url;
+    el.src = `/media/${m.id}`;
     if (m.kind === 'video') {
       el.controls = true;
       el.preload = 'metadata';
@@ -2001,18 +2038,111 @@
       el.alt = m.name;
     }
     item.appendChild(el);
+    if (editable) {
+      const remove = document.createElement('button');
+      remove.className = 'work-remove';
+      remove.dataset.id = m.id;
+      remove.setAttribute('aria-label', `Remove ${m.name || m.kind}`);
+      remove.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4">
+          <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
+        </svg>`;
+      item.appendChild(remove);
+    }
     return item;
   }
 
+  function workPanel() {
+    const panel = document.getElementById('about-panel');
+    return panel?.dataset.section === 'work' ? panel : null;
+  }
+
   function renderWorkMedia(panel) {
+    if (!panel) return;
+    const editable = workEditable();
     panel.querySelectorAll('.work-media').forEach(list => {
-      list.replaceChildren(...workMedia.map(workMediaEl));
+      list.replaceChildren(...workMedia.map(m => workMediaEl(m, editable)));
     });
+    const hint = uploading ? `Uploading ${uploading} file${uploading > 1 ? 's' : ''}…` : DROP_HINT;
+    panel.querySelectorAll('.work-drop-hint').forEach(p => { p.textContent = hint; });
+  }
+
+  async function loadMedia() {
+    try {
+      const res = await fetch('/media', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      workMedia = await res.json();
+    } catch (err) {
+      console.warn('Work media unavailable.', err);
+      return;
+    }
+    renderWorkMedia(workPanel());
+  }
+
+  // Why a save, upload or removal failed, in words.
+  function failureReason(status) {
+    if (status === 401) return 'you’ve been signed out — sign in again in another tab';
+    if (status === 413) return 'the file is too large';
+    return status ? `HTTP ${status}` : 'network error';
+  }
+
+  // One at a time, so the hint's count is honest and a big video doesn't
+  // compete with the rest for the connection.
+  async function uploadWorkMedia(files) {
+    const failed = [];
+    const accepted = files.filter(f => /^(image|video)\//.test(f.type));
+    uploading += accepted.length;
+    renderWorkMedia(workPanel());
+    for (const file of accepted) {
+      let status = 413;
+      if (file.size <= MAX_MEDIA_BYTES) {
+        try {
+          const res = await fetch('/media', {
+            method: 'POST',
+            headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) },
+            body: file,
+          });
+          status = res.status;
+          if (res.ok) workMedia.push(await res.json());
+        } catch {
+          status = 0;
+        }
+      }
+      if (status !== 201) failed.push(`${file.name}: ${failureReason(status)}`);
+      uploading--;
+      renderWorkMedia(workPanel());
+    }
+    if (failed.length) alert(`Couldn't upload:\n${failed.join('\n')}`);
+  }
+
+  async function removeWorkMedia(button) {
+    const item = workMedia.find(m => m.id === button.dataset.id);
+    if (!item || !confirm(`Remove ${item.name || `this ${item.kind}`}? This can't be undone.`)) return;
+    button.disabled = true;
+    let status;
+    try {
+      status = (await fetch(`/media/${item.id}`, { method: 'DELETE' })).status;
+    } catch {
+      status = 0;
+    }
+    if (status !== 204) {
+      button.disabled = false;
+      alert(`Couldn't remove ${item.name || `this ${item.kind}`} (${failureReason(status)}).`);
+      return;
+    }
+    workMedia = workMedia.filter(m => m !== item);
+    renderWorkMedia(workPanel());
   }
 
   const draggingFiles = e => !!e.dataTransfer?.types.includes('Files');
 
-  function wireWorkDrop(panel) {
+  function wireWorkEditing(panel) {
+    panel.addEventListener('click', (e) => {
+      const remove = e.target.closest('.work-remove');
+      if (!remove) return;
+      e.stopPropagation();
+      removeWorkMedia(remove);
+    });
     // dragenter/dragleave fire for every child crossed, so count depth rather
     // than toggling on each event, or the highlight flickers.
     let depth = 0;
@@ -2037,12 +2167,7 @@
       e.preventDefault();
       depth = 0;
       setOver(false);
-      for (const file of e.dataTransfer.files) {
-        const kind = file.type.split('/')[0];
-        if (kind !== 'image' && kind !== 'video') continue;
-        workMedia.push({ url: URL.createObjectURL(file), kind, name: file.name });
-      }
-      renderWorkMedia(panel);
+      uploadWorkMedia([...e.dataTransfer.files]);
     });
   }
 
@@ -2055,7 +2180,7 @@
     e.dataTransfer.dropEffect = 'none';
   }));
 
-  // ── Section editing (ABOUT / CONTACT) ───────────────────────────────────────
+  // ── Section editing (WORK / ABOUT / CONTACT) ────────────────────────────────
   //
   // The open section's body can be edited in place: the ✎ under the ⊗ makes it
   // contenteditable, and the same button (now ✓) saves. Escape cancels;
@@ -2067,36 +2192,29 @@
   // link) that the panel CSS already targets. Anything the browser or a paste
   // brought in — spans, inline styles, fonts — is reduced to its text.
   //
-  // Saved copy lives on the content Worker (api/ in this repo): fetched once on
-  // load, written on save. BEAM_CONTENT stays the fallback for a section that
-  // was never saved, or when the Worker can't be reached; saving an empty body
-  // clears the override and brings that original copy back.
+  // Saved copy lives on the Worker that serves this page (api/ in this repo):
+  // fetched once on load from /sections, written on save. The site's password
+  // login is the only credential — its session cookie rides along on these
+  // same-origin requests. BEAM_CONTENT stays the fallback for a section that was
+  // never saved, or when the page is opened without the Worker (a local file);
+  // saving an empty body clears the override and brings that original copy back.
   //
-  // Only editors see the ✎: opening the page with ?edit turns editor mode on,
-  // and the edit key (asked for on the first save, and the Worker's EDIT_KEY)
-  // keeps it on in that browser. ?edit=off forgets the key.
-  const CONTENT_API = 'https://lnamazi-content.luke-conley.workers.dev';   // the deployed Worker's URL, no trailing slash
-  const EDITABLE = new Set(['about', 'contact']);
+  // The ✎ shows only in editor mode, and only once /sections has answered (so
+  // never on a copy of the page that has nowhere to save). ?edit turns editor
+  // mode on and this browser remembers it; ?edit=off turns it off again.
+  const EDITABLE = new Set(['work', 'about', 'contact']);
   const savedHtml = {};     // section → the Worker's copy, once loaded
+  let contentOnline = false;
   let editState = null;     // { section, body, before, saving } while editing
 
-  const EDIT_KEY_STORE = 'lnamazi.editKey';
+  const EDITOR_STORE = 'lnamazi.editor';
   const editParam = new URLSearchParams(location.search).get('edit');  // null when absent
-  let editKey = null;       // in memory too, in case storage is blocked
+  let editorMode = editParam !== null && editParam !== 'off';
   try {
-    if (editParam === 'off') localStorage.removeItem(EDIT_KEY_STORE);
-    else editKey = localStorage.getItem(EDIT_KEY_STORE);
+    if (editParam === 'off') localStorage.removeItem(EDITOR_STORE);
+    else if (editParam !== null) localStorage.setItem(EDITOR_STORE, '1');
+    else editorMode = localStorage.getItem(EDITOR_STORE) === '1';
   } catch {}
-  const editorMode = !!CONTENT_API &&
-    (editKey !== null || (editParam !== null && editParam !== 'off'));
-
-  function rememberEditKey(key) {
-    editKey = key;
-    try {
-      if (key === null) localStorage.removeItem(EDIT_KEY_STORE);
-      else localStorage.setItem(EDIT_KEY_STORE, key);
-    } catch {}
-  }
 
   function sectionHtml(section) {
     return savedHtml[section] ?? BEAM_CONTENT[section].html;
@@ -2107,16 +2225,16 @@
   // already open when it lands is refreshed in place (every copy of its body,
   // so shards' slats stay in step).
   async function loadSections() {
-    if (!CONTENT_API) return;
     let data;
     try {
-      const res = await fetch(`${CONTENT_API}/sections`, { cache: 'no-store' });
+      const res = await fetch('/sections', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       data = await res.json();
     } catch (err) {
       console.warn('Section content unavailable; showing the built-in copy.', err);
       return;
     }
+    contentOnline = true;
     const panel = document.getElementById('about-panel');
     EDITABLE.forEach(section => {
       if (typeof data?.[section] !== 'string') return;
@@ -2131,9 +2249,9 @@
   }
 
   async function putSection(section, html) {
-    const res = await fetch(`${CONTENT_API}/sections/${section}`, {
+    const res = await fetch(`/sections/${section}`, {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${editKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ html }),
     });
     return res.status;
@@ -2237,16 +2355,11 @@
   }
 
   // Stays in editing, with the text as typed, unless the Worker confirms the
-  // save: a refused key is forgotten and asked for again on the next try.
+  // save.
   async function saveEdit() {
     if (!editState || editState.saving) return;
     const state = editState;
     const { section, body } = state;
-    if (editKey === null) {
-      const key = prompt('Edit key');
-      if (!key) return;
-      rememberEditKey(key.trim());
-    }
     const html = cleanBody(body);
     const edit = document.getElementById('about-edit');
     state.saving = true;
@@ -2269,13 +2382,11 @@
       return;
     }
     body.contentEditable = 'true';
-    if (status === 401) {
-      rememberEditKey(null);
-      alert('That edit key was refused. Save again to enter it.');
-    } else {
-      alert(`Couldn't save (${status ? 'HTTP ' + status : 'network error'}). ` +
-            'Your text is still here; try saving again.');
-    }
+    // A 401 means the session ended (or the password changed) while the page
+    // was open. Reloading would throw the edit away, so the reason says to sign
+    // in beside it.
+    alert(`Couldn't save (${failureReason(status)}). ` +
+          'Your text is still here; try saving again.');
     body.focus();
   }
 
@@ -2346,13 +2457,14 @@
       <div class="about-inner">
         <h2>${BEAM_CONTENT[section].title}</h2>
         <div class="beam-body">${sectionHtml(section)}</div>
+        ${section === 'work' ? workMediaMarkup() : ''}
       </div>`;
     document.body.appendChild(panel);
     // Before the motif: shards copies the panel's innerHTML into its strips,
     // so the media has to be in place for every strip to carry it.
     if (section === 'work') {
       renderWorkMedia(panel);
-      wireWorkDrop(panel);
+      if (workEditable()) wireWorkEditing(panel);
     }
     // The panel is in the DOM and laid out; the motif takes it from here.
     // Under reduced-motion the section simply is there, as the ornament simply
@@ -2374,7 +2486,8 @@
       </svg>`;
     close.addEventListener('click', (e) => { e.stopPropagation(); closeBeam(); });
     document.body.appendChild(close);
-    const edit = editorMode && EDITABLE.has(section) ? wireEditing(panel, section) : null;
+    const edit = editorMode && contentOnline && EDITABLE.has(section)
+      ? wireEditing(panel, section) : null;
     layoutPanelButtons();
     setTimeout(() => {
       close.classList.add('visible');
@@ -2431,7 +2544,9 @@
   // so the old pop-up open/close wiring (kept below, commented) would work again
   // if restored.
   window.addEventListener('DOMContentLoaded', spawnGeometry);
-  loadSections();
+  // Media second: whether its list renders editable depends on contentOnline,
+  // which the sections load settles.
+  loadSections().then(loadMedia);
 
   let resizeTimer;
   window.addEventListener('resize', () => {

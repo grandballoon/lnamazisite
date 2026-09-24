@@ -13,7 +13,23 @@
 			"id": "34357d51ce5d4f8899a0e8969a1b90e0",
 			"remote": true
 		}
-	]
-	// The EDIT_KEY secret is set with `npx wrangler secret put EDIT_KEY`,
+	],
+	// WORK's images and video, one object per file (see src/index.js).
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "lnamazi-media",
+			"remote": true
+		}
+	],
+	// The site itself is the repo root, served only through the Worker's
+	// password check (run_worker_first). ../.assetsignore keeps this api/
+	// folder, git metadata and docs out of the upload.
+	"assets": {
+		"directory": "..",
+		"binding": "ASSETS",
+		"run_worker_first": true
+	}
+	// The SITE_PASSWORD secret is set with `npx wrangler secret put SITE_PASSWORD`,
 	// never written here.
 }

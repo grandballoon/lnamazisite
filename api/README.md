@@ -1,8 +1,10 @@
 # lnamazi-content
 
-A provisional content store for the site's editable ABOUT and CONTACT sections: a Cloudflare Worker backed by one KV namespace.
-Reads are public; writes need the `EDIT_KEY` secret as a bearer token.
-The API contract is documented at the top of [src/index.js](src/index.js).
+A provisional home for the site: a Cloudflare Worker that serves the static pages in the repo root behind one shared password, and stores the editable WORK, ABOUT and CONTACT text in a KV namespace and WORK's images and video in an R2 bucket.
+Signing in sets a session cookie; that session is also what authorizes saving edits.
+The routes and the session design are documented at the top of [src/index.js](src/index.js).
+
+Everything in the repo root is published except what [../.assetsignore](../.assetsignore) lists (this folder, git files, docs).
 
 ## Setup (once)
 
@@ -12,19 +14,32 @@ Needs Node 22 or newer; with nvm, `nvm use` picks it up from `.nvmrc`.
 nvm use
 npm install
 npx wrangler kv namespace create CONTENT   # paste the printed id into wrangler.jsonc
-npx wrangler secret put EDIT_KEY           # choose a long random key; this is the editors' password
-npm run deploy                             # prints the Worker URL
+npx wrangler r2 bucket create lnamazi-media   # R2 must be enabled in the dashboard first
+npx wrangler secret put SITE_PASSWORD      # the password visitors type to get in
+npm run deploy                             # prints the site's URL
 ```
 
-Put the printed Worker URL into `CONTENT_API` in `../index.html`.
+Changing `SITE_PASSWORD` later signs everyone out.
 
-## Editing the live site
+## Publishing changes
 
-Open the site with `?edit` on the URL (e.g. `https://…/index.html?edit`).
-The ✎ button then appears on ABOUT and CONTACT.
-The first save asks for the edit key and remembers it in that browser, so later visits need no `?edit`.
-Visitors without a remembered key see no edit control.
-`?edit=off` forgets the key in that browser.
+Run `npm run deploy` from this folder after changing the site or the Worker.
+
+## Editing the text
+
+Sign in, then open the site with `?edit` on the URL (e.g. `https://…/?edit`).
+The ✎ button then appears on WORK, ABOUT and CONTACT, and that browser remembers editor mode.
+On WORK, drop images or video onto the panel to add them (95 MB per file at most); the ⊗ on each removes it.
+`?edit=off` turns it off again.
+
+## Local development
+
+```sh
+printf 'SITE_PASSWORD=dev\n' > .dev.vars   # git-ignored
+npm run dev
+```
+
+The KV and R2 bindings are marked `remote`, so local development reads and writes the live text and media.
 
 ## Tests
 

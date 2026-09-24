@@ -1,0 +1,6 @@
+# Kept out of the site's static assets (see api/wrangler.jsonc).
+api
+.git
+.gitignore
+.assetsignore
+README.md
